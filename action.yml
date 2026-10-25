@@ -1,0 +1,27 @@
+name: Site-Shot Screenshot
+description: Capture one public https:// page as a PNG with the Site-Shot API, in one capture attempt with retries disabled.
+inputs:
+  url:
+    description: The public https:// page to capture, such as https://www.example.com/.
+    required: true
+  api-key:
+    description: A paid Site-Shot API key. Pass it from a GitHub Actions secret; never write the key into a workflow.
+    required: true
+  width:
+    description: Viewport width in pixels, 100 to 8000.
+    required: false
+    default: "1024"
+  height:
+    description: Viewport height in pixels, 100 to 20000.
+    required: false
+    default: "768"
+  country:
+    description: Optional two-letter country code, such as DE. With a country the capture is strict, and fails instead of using another country.
+    required: false
+    default: ""
+outputs:
+  path:
+    description: The saved PNG, relative to the workspace. Always site-shot-output/screenshot.png.
+runs:
+  using: node24
+  main: dist/index.mjs

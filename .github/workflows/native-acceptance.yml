@@ -1,0 +1,372 @@
+# Native offline acceptance of the Site-Shot Screenshot action.
+#
+# Manual only. The job runs the action the way a workflow does, with
+# `uses: ./`: the runner itself reads action.yml and starts the committed
+# dist/index.mjs with its own node24. Nothing reaches Site-Shot:
+#
+# - The offline tests' fetch stub (test/support/fetch-stub.ts) answers in
+#   place of the API, and their network guard (test/support/no-network.ts)
+#   refuses every other connection. Both are preloaded into the action's
+#   process through NODE_OPTIONS, followed by a small copier, written below,
+#   that keeps what the action prints.
+# - api.site-shot.com resolves to this machine for the whole job, so an
+#   action without the stub fails to connect instead of calling the API.
+# - The API key is the offline tests' dummy key. The workflow uses no secret.
+#
+# The job uploads nothing, caches nothing and only reads the repository. It
+# checks the request, the saved PNG, the `path` output and the printed lines
+# of five runs, the last three of which fail on purpose and leave an error
+# annotation each, then runs the offline test suite on the runner. It is not
+# a live capture: no page is captured and nothing is billed.
+name: Native acceptance (offline)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-offline:
+    name: The action through action.yml, offline, on ubuntu-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    env:
+      # The accepted bundle: the job stops if the checkout holds another one.
+      ACCEPTED_BUNDLE_SHA256: f10db86c7e6d38046947690d71f469f8769c19b12f52994180cab78e29f8310c
+    steps:
+      # Both actions are pinned to a full commit SHA.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Record the runner and check the bundle
+        run: |
+          uname -a
+          node --version
+          echo "$ACCEPTED_BUNDLE_SHA256  dist/index.mjs" | sha256sum --check --strict
+
+      - name: Install the locked dependencies of the checks, without install scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Make api.site-shot.com resolve to this machine
+        run: |
+          printf '0.0.0.0 api.site-shot.com\n:: api.site-shot.com\n' | sudo tee -a /etc/hosts > /dev/null
+          getent ahosts api.site-shot.com | awk '{ print $1 }' | sort -u > "$RUNNER_TEMP/api-addresses"
+          cat "$RUNNER_TEMP/api-addresses"
+          test -s "$RUNNER_TEMP/api-addresses"
+          if grep -v -x -e '0.0.0.0' -e '::' "$RUNNER_TEMP/api-addresses"; then
+            echo "api.site-shot.com still resolves to another address"
+            exit 1
+          fi
+
+      - name: Write the test wiring and the stub answers to RUNNER_TEMP
+        run: |
+          cat > "$RUNNER_TEMP/stdout-copy.mjs" <<'EOF'
+          // Test wiring for this workflow only, preloaded into the action's
+          // process after the network guard and the fetch stub. It keeps a
+          // copy of what the action writes to stdout in STDOUT_COPY, records
+          // which Node.js runs the action and, at exit, what the network guard
+          // refused. It changes nothing that the action writes.
+          import fs from "node:fs";
+          import { syncBuiltinESMExports } from "node:module";
+          import net from "node:net";
+          import { join } from "node:path";
+          import { pathToFileURL } from "node:url";
+
+          const copy = process.env.STDOUT_COPY;
+          // The guard preloaded through NODE_OPTIONS, not a second copy of it:
+          // importing it again must find it loaded and patch nothing.
+          const connect = net.Socket.prototype.connect;
+          const guard = pathToFileURL(join(process.env.GITHUB_WORKSPACE, "test", "support", "no-network.ts")).href;
+          const { refusals } = await import(guard);
+          if (net.Socket.prototype.connect !== connect) throw new Error("the network guard was not preloaded");
+
+          fs.writeFileSync(`${copy}.runtime.json`, JSON.stringify({ version: process.version, execPath: process.execPath }));
+          process.on("exit", () => fs.writeFileSync(`${copy}.refusals.json`, JSON.stringify(refusals)));
+
+          const writeSync = fs.writeSync;
+          fs.writeSync = function (fd, data, ...rest) {
+            const written = Reflect.apply(writeSync, this, [fd, data, ...rest]);
+            if (fd === 1) fs.appendFileSync(copy, typeof data === "string" ? data : "(a write that is not text)\n");
+            return written;
+          };
+          syncBuiltinESMExports();
+          EOF
+          cat > "$RUNNER_TEMP/native.mjs" <<'EOF'
+          // The checks of this workflow. Each run of the action on the runner
+          // is held to the constants and helpers of the offline tests: the same
+          // dummy key and page URL, the same stub answers and the same list of
+          // text that must never be shown.
+          import assert from "node:assert/strict";
+          import { createHash } from "node:crypto";
+          import fs from "node:fs";
+          import { join } from "node:path";
+          import { pathToFileURL } from "node:url";
+
+          const workspace = process.env.GITHUB_WORKSPACE;
+          const temp = process.env.RUNNER_TEMP;
+          const support = (name) => pathToFileURL(join(workspace, "test", "support", name)).href;
+          const { HOSTILE, KEY, SCREENSHOT, TARGET, leaksIn } = await import(support("action.ts"));
+          const { captured } = await import(support("api.ts"));
+
+          const OUTPUT = join(workspace, "site-shot-output");
+          const capturing = (size) => `Capturing one page with Site-Shot at ${size}: one capture attempt, retries disabled.`;
+          const SAVED = `Saved a 1024x768 PNG (${SCREENSHOT.length} bytes) to site-shot-output/screenshot.png.`;
+
+          // `query`: the run makes one fetch call with these parameters on top
+          // of format, response_type, url and userkey; without it, none.
+          // `lines`: what the action prints after masking the key, before its
+          // error line if it fails. The stub answers every capture with the
+          // same 1024x768 PNG: run 2 requests 1280x800, and the PNG it saves
+          // and reports is still 1024x768. It checks the request, not an
+          // image of the requested size.
+          const CASES = {
+            defaults: { outcome: "success", query: { width: "1024", height: "768" }, lines: [capturing("1024x768"), SAVED] },
+            options: {
+              outcome: "success",
+              query: { width: "1280", height: "800", country: "DE", strict_country: "1" },
+              lines: [capturing("1280x800, country DE (strict)"), SAVED],
+            },
+            api_error: {
+              outcome: "failure",
+              query: { width: "1024", height: "768" },
+              lines: [capturing("1024x768")],
+              error: ["(AuthError, HTTP 401)", "Nothing was saved, and the action does not retry."],
+            },
+            invalid_input: { outcome: "failure", lines: [], error: ["Input width", "Nothing was sent to Site-Shot."] },
+            existing_file: { outcome: "failure", lines: [], error: ["already exists", "Nothing was sent to Site-Shot."] },
+          };
+
+          /** The workspace's directories and files, without .git and node_modules. */
+          function listing(directory = workspace, prefix = "") {
+            return fs
+              .readdirSync(directory, { withFileTypes: true })
+              .filter((entry) => prefix !== "" || (entry.name !== ".git" && entry.name !== "node_modules"))
+              .flatMap((entry) => {
+                const path = `${prefix}${entry.name}`;
+                return entry.isDirectory() ? [`${path}/`, ...listing(join(directory, entry.name), `${path}/`)] : [path];
+              })
+              .sort();
+          }
+
+          function lines(file) {
+            return fs.existsSync(file) ? fs.readFileSync(file, "utf8").split("\n").filter((line) => line !== "") : [];
+          }
+
+          function prepare() {
+            assert.equal(fs.existsSync(OUTPUT), false, "site-shot-output exists before the first run");
+            fs.writeFileSync(join(temp, "captured.json"), JSON.stringify(captured(SCREENSHOT, TARGET)));
+            fs.writeFileSync(join(temp, "hostile.json"), JSON.stringify({ message: HOSTILE }));
+            fs.writeFileSync(join(temp, "listing.json"), JSON.stringify(listing()));
+          }
+
+          function arrange() {
+            fs.mkdirSync(OUTPUT);
+            fs.writeFileSync(join(OUTPUT, "screenshot.png"), "caller's file");
+          }
+
+          function check(name) {
+            const expected = CASES[name];
+            assert.ok(expected, `no case ${name}`);
+            const base = join(temp, name);
+
+            // Written from inside the action's process: the runner loaded all three preloads.
+            const runtime = JSON.parse(fs.readFileSync(`${base}.stdout.runtime.json`, "utf8"));
+            console.log(`${name}: the action ran on Node.js ${runtime.version}, ${runtime.execPath}`);
+            assert.match(runtime.version, /^v24\./, "the action did not run on node24");
+            const refused = JSON.parse(fs.readFileSync(`${base}.stdout.refusals.json`, "utf8"));
+            assert.deepEqual(refused, [], "the network guard refused a connection");
+            assert.equal(process.env.OUTCOME, expected.outcome, "step outcome");
+
+            const calls = lines(`${base}.calls`).map((line) => JSON.parse(line));
+            assert.equal(calls.length, expected.query ? 1 : 0, "fetch calls");
+            for (const call of calls) {
+              const url = new URL(call.url);
+              assert.equal(`${url.origin}${url.pathname}`, "https://api.site-shot.com/");
+              const query = { format: "png", response_type: "json", url: TARGET, userkey: KEY, ...expected.query };
+              assert.deepEqual([...url.searchParams].sort(), Object.entries(query).sort());
+              assert.deepEqual(call.headers, { accept: "application/json", "user-agent": "site-shot-sdk/0.2.0 node" });
+            }
+
+            const [mask, ...shown] = lines(`${base}.stdout`);
+            assert.equal(mask, `::add-mask::${KEY}`, "the key is masked before anything else is printed");
+            const output = process.env.OUTPUT_PATH ?? "";
+            assert.deepEqual(leaksIn([...shown, output].join("\n")), [], "sensitive text in the log or the output");
+            console.log(`${name}: printed ${JSON.stringify(shown)}`);
+
+            if (expected.outcome === "success") {
+              assert.deepEqual(shown, expected.lines);
+              assert.equal(output, "site-shot-output/screenshot.png");
+              assert.deepEqual(fs.readdirSync(OUTPUT), ["screenshot.png"]);
+              const saved = fs.readFileSync(join(OUTPUT, "screenshot.png"));
+              assert.ok(saved.equals(SCREENSHOT), "the saved file is not the PNG the stub answered with");
+              console.log(`${name}: saved ${saved.length} bytes, sha256 ${createHash("sha256").update(saved).digest("hex")}`);
+            } else {
+              assert.deepEqual(shown.slice(0, -1), expected.lines);
+              const error = shown.at(-1) ?? "";
+              assert.ok(error.startsWith("::error::"), "the last line is the error");
+              for (const part of expected.error) assert.ok(error.includes(part), `"${part}" in the error line`);
+              assert.equal(output, "");
+              if (name === "existing_file") {
+                assert.deepEqual(fs.readdirSync(OUTPUT), ["screenshot.png"]);
+                assert.equal(fs.readFileSync(join(OUTPUT, "screenshot.png"), "utf8"), "caller's file");
+              } else {
+                assert.equal(fs.existsSync(OUTPUT), false, "the failed run created site-shot-output");
+              }
+            }
+
+            // Back to the checkout for the next run: nothing else may have changed.
+            fs.rmSync(OUTPUT, { recursive: true, force: true });
+            const before = JSON.parse(fs.readFileSync(join(temp, "listing.json"), "utf8"));
+            assert.deepEqual(listing(), before, "the workspace changed outside site-shot-output");
+          }
+
+          const [command, name] = process.argv.slice(2);
+          if (command === "prepare") prepare();
+          else if (command === "arrange" && name === "existing_file") arrange();
+          else if (command === "check") check(name);
+          else throw new Error("usage: native.mjs prepare | arrange existing_file | check <case>");
+          EOF
+          node "$RUNNER_TEMP/native.mjs" prepare
+
+      - name: "Run 1: the defaults of action.yml"
+        id: defaults
+        uses: ./
+        env:
+          NODE_OPTIONS: >-
+            --import=file://${{ github.workspace }}/test/support/no-network.ts
+            --import=file://${{ github.workspace }}/test/support/fetch-stub.ts
+            --import=file://${{ runner.temp }}/stdout-copy.mjs
+          STUB_CALLS: ${{ runner.temp }}/defaults.calls
+          STUB_BODY: ${{ runner.temp }}/captured.json
+          STUB_STATUS: "200"
+          STDOUT_COPY: ${{ runner.temp }}/defaults.stdout
+        with:
+          url: "https://www.example.com/pricing/?ref=target-query-marker&token=TARGETTOKEN"
+          # The offline tests' dummy key, not a real one: this workflow has no secret.
+          api-key: sk-test-KEYMARKER-0123456789
+
+      - name: "Check run 1"
+        run: node "$RUNNER_TEMP/native.mjs" check defaults
+        env:
+          OUTCOME: ${{ steps.defaults.outcome }}
+          OUTPUT_PATH: ${{ steps.defaults.outputs.path }}
+
+      - name: "Run 2: a 1280x800 request with a country; the stub still answers with its 1024x768 PNG"
+        id: options
+        uses: ./
+        env:
+          NODE_OPTIONS: >-
+            --import=file://${{ github.workspace }}/test/support/no-network.ts
+            --import=file://${{ github.workspace }}/test/support/fetch-stub.ts
+            --import=file://${{ runner.temp }}/stdout-copy.mjs
+          STUB_CALLS: ${{ runner.temp }}/options.calls
+          STUB_BODY: ${{ runner.temp }}/captured.json
+          STUB_STATUS: "200"
+          STDOUT_COPY: ${{ runner.temp }}/options.stdout
+        with:
+          url: "https://www.example.com/pricing/?ref=target-query-marker&token=TARGETTOKEN"
+          api-key: sk-test-KEYMARKER-0123456789
+          width: 1280
+          height: 800
+          country: de
+
+      - name: "Check run 2"
+        run: node "$RUNNER_TEMP/native.mjs" check options
+        env:
+          OUTCOME: ${{ steps.options.outcome }}
+          OUTPUT_PATH: ${{ steps.options.outputs.path }}
+
+      - name: "Run 3, fails on purpose: the API rejects the key with a hostile answer"
+        id: api_error
+        continue-on-error: true
+        uses: ./
+        env:
+          NODE_OPTIONS: >-
+            --import=file://${{ github.workspace }}/test/support/no-network.ts
+            --import=file://${{ github.workspace }}/test/support/fetch-stub.ts
+            --import=file://${{ runner.temp }}/stdout-copy.mjs
+          STUB_CALLS: ${{ runner.temp }}/api_error.calls
+          STUB_BODY: ${{ runner.temp }}/hostile.json
+          STUB_STATUS: "401"
+          STDOUT_COPY: ${{ runner.temp }}/api_error.stdout
+        with:
+          url: "https://www.example.com/pricing/?ref=target-query-marker&token=TARGETTOKEN"
+          api-key: sk-test-KEYMARKER-0123456789
+
+      - name: "Check run 3"
+        run: node "$RUNNER_TEMP/native.mjs" check api_error
+        env:
+          OUTCOME: ${{ steps.api_error.outcome }}
+          OUTPUT_PATH: ${{ steps.api_error.outputs.path }}
+
+      - name: "Run 4, fails on purpose: a width below the API's minimum"
+        id: invalid_input
+        continue-on-error: true
+        uses: ./
+        env:
+          NODE_OPTIONS: >-
+            --import=file://${{ github.workspace }}/test/support/no-network.ts
+            --import=file://${{ github.workspace }}/test/support/fetch-stub.ts
+            --import=file://${{ runner.temp }}/stdout-copy.mjs
+          STUB_CALLS: ${{ runner.temp }}/invalid_input.calls
+          STUB_BODY: ${{ runner.temp }}/captured.json
+          STUB_STATUS: "200"
+          STDOUT_COPY: ${{ runner.temp }}/invalid_input.stdout
+        with:
+          url: "https://www.example.com/pricing/?ref=target-query-marker&token=TARGETTOKEN"
+          api-key: sk-test-KEYMARKER-0123456789
+          width: 99
+
+      - name: "Check run 4"
+        run: node "$RUNNER_TEMP/native.mjs" check invalid_input
+        env:
+          OUTCOME: ${{ steps.invalid_input.outcome }}
+          OUTPUT_PATH: ${{ steps.invalid_input.outputs.path }}
+
+      - name: "Put a caller's file at site-shot-output/screenshot.png"
+        run: node "$RUNNER_TEMP/native.mjs" arrange existing_file
+
+      - name: "Run 5, fails on purpose: the screenshot file already exists"
+        id: existing_file
+        continue-on-error: true
+        uses: ./
+        env:
+          NODE_OPTIONS: >-
+            --import=file://${{ github.workspace }}/test/support/no-network.ts
+            --import=file://${{ github.workspace }}/test/support/fetch-stub.ts
+            --import=file://${{ runner.temp }}/stdout-copy.mjs
+          STUB_CALLS: ${{ runner.temp }}/existing_file.calls
+          STUB_BODY: ${{ runner.temp }}/captured.json
+          STUB_STATUS: "200"
+          STDOUT_COPY: ${{ runner.temp }}/existing_file.stdout
+        with:
+          url: "https://www.example.com/pricing/?ref=target-query-marker&token=TARGETTOKEN"
+          api-key: sk-test-KEYMARKER-0123456789
+
+      - name: "Check run 5"
+        run: node "$RUNNER_TEMP/native.mjs" check existing_file
+        env:
+          OUTCOME: ${{ steps.existing_file.outcome }}
+          OUTPUT_PATH: ${{ steps.existing_file.outputs.path }}
+
+      - name: Type-check and run the offline test suite on the runner
+        run: |
+          npm run typecheck
+          npm test
+
+      - name: Check that the bundle and the checkout are unchanged
+        run: |
+          echo "$ACCEPTED_BUNDLE_SHA256  dist/index.mjs" | sha256sum --check --strict
+          git status --porcelain --untracked-files=all > "$RUNNER_TEMP/status"
+          cat "$RUNNER_TEMP/status"
+          test ! -s "$RUNNER_TEMP/status"
