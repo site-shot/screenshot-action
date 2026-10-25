@@ -42,7 +42,7 @@ Nothing in a test run can reach the network. `npm test` preloads `test/support/n
 
 ## Native acceptance
 
-`.github/workflows/native-acceptance.yml` runs the action on a standard `ubuntu-latest` GitHub-hosted runner, offline. It has never run. Only a person can start it (`workflow_dispatch`). The job reads the repository with a read-only token that the checkout does not keep, uses no secret, and uploads and caches nothing. Its steps:
+`.github/workflows/native-acceptance.yml` runs the action on a standard `ubuntu-latest` GitHub-hosted runner, offline. It ran once, on 2026-10-25, and passed: https://github.com/site-shot/screenshot-action/actions/runs/40236678006, from commit `bad2c9b11626aa3b42d4ce1bef72f0b9992d44b1`. The runner reported Ubuntu 24.04.5 and ran the action on Node.js 24.21.0; the five runs below passed their checks, and so did the 66 offline tests. Only a person can start it (`workflow_dispatch`). The job reads the repository with a read-only token that the checkout does not keep, uses no secret, and uploads and caches nothing. Its steps:
 
 1. It stops unless `dist/index.mjs` has the SHA-256 written in the workflow, that of the accepted bundle (`f10db86c...`).
 2. It installs the locked dependencies with `npm ci --ignore-scripts`, for the checks only: the action itself runs from `dist/`.
@@ -84,21 +84,18 @@ Two checks went beyond the offline tests. Each ran once, locally and not on a Gi
 
 ## Not verified
 
-- A run on a GitHub-hosted or self-hosted runner, on any operating system: the native acceptance workflow is prepared but has never run. The tests ran on macOS with Node.js 24.10.0; the bundle uses only Node.js built-ins.
+- Any runner but that of the one native acceptance run, a standard `ubuntu-latest` runner with Ubuntu 24.04.5: other operating systems, other runner images or sizes, and self-hosted runners. That run was offline: it made no capture through the live API. Apart from it, the tests ran on macOS with Node.js 24.10.0; the bundle uses only Node.js built-ins.
 - Any capture through the live Site-Shot API other than the one above: none from a GitHub runner, and none of another page, size or country. The API's error answers are tested only against the stub.
 - Large images whose content compresses less well. A less compressible PNG of the largest size makes a larger answer, which takes memory on top of the decompression. The offline tests reach the size limits only with images of 8000x1 and 1x20000, and their largest image is 1024x768.
 - The GitHub Marketplace requirements, and whether the name in `action.yml` is free there.
 
 ## Releasing
 
-Nothing has been released, and this file plans or authorizes no run, capture or publication. Of the checks before a release, the two in "Verified locally" are done. Each remaining step needs its own explicit approval and evidence:
-- a run of the native acceptance workflow;
-- publication.
+Nothing has been released: there is no release tag, GitHub Release or GitHub Marketplace listing. This file plans or authorizes no run, capture or publication. Of the checks before a release, the two in "Verified locally" are done, and so is the one run of the native acceptance workflow (see "Native acceptance"). Publication remains, and it needs its own explicit approval and evidence.
 
 An approval for live captures has to list every real capture attempt it allows, including attempts expected to fail and attempts whose outcome turns out unknown, such as a timeout or a lost connection, because each one can be billed.
 
-Publication would need:
-- a public repository, planned as `site-shot/screenshot-action`, with this directory at its root;
+The source is public at https://github.com/site-shot/screenshot-action, with this directory at its root. Publication would still need:
 - a release tag;
 - a check that the action's name is free on the GitHub Marketplace;
-- for a listing, acceptance of the GitHub Marketplace Developer Agreement.
+- for a listing, acceptance of the GitHub Marketplace Developer Agreement, which GitHub requires for publishing to the Marketplace. Marketplace publication is pending.

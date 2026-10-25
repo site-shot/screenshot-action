@@ -2,17 +2,17 @@
 
 A GitHub Action that captures one public `https://` page as a PNG with the [Site-Shot](https://www.site-shot.com/) API and saves it in the job's workspace as `site-shot-output/screenshot.png`. It is a thin adapter around the official [site-shot-sdk](https://www.npmjs.com/package/site-shot-sdk) for Node.js: the SDK talks to the API, and the action adds input checks, a PNG check and one checked place to write.
 
-## Status: local acceptance passed; native runner and release pending
+## Status: release candidate, not released; local and native offline acceptance passed
 
 As of 2026-10-25:
 
 - **Offline tests**: pass on Node.js 24.10.0 with site-shot-sdk 0.2.0. They replace the SDK's `fetch` with a stub, refuse every network connection, use synthetic images and never contact Site-Shot.
 - **The largest PNG it accepts**: checked once, locally on one Mac with Node.js 24.10.0, through this exact bundle, with the offline tests' stub in place of Site-Shot. A synthetic 8000x20000 PNG with 16-bit RGBA went through the decoding, the PNG check and the write with a peak RSS of 2,706,407,424 bytes (2.52 GiB), and the action child process took 0.804 s, excluding fixture generation. That image compresses very well, to a 6.6 MiB PNG, so the check does not cover every image of that size, other operating systems or a GitHub runner.
 - **Against the live Site-Shot API**: one capture, made locally through this exact bundle, not on a GitHub runner: `https://example.com/` as a 1024x768 PNG, country `DE` (strict), retries disabled. It succeeded, and the saved PNG shows that page, with its text and link readable. The API key was not given to GitHub. It is a single test capture of one page.
-- **On a GitHub Actions runner**: not run yet, so the action is not verified there. A manual workflow, `.github/workflows/native-acceptance.yml`, is prepared to run it there offline, through `action.yml` and `dist/`, with the same stub in place of Site-Shot.
-- **Release**: pending. The planned home is the GitHub repository `site-shot/screenshot-action`, with a release tag and a GitHub Marketplace listing.
+- **On a GitHub Actions runner**: one manual run of `.github/workflows/native-acceptance.yml`, on 2026-10-25, passed: https://github.com/site-shot/screenshot-action/actions/runs/40236678006, from commit `bad2c9b11626aa3b42d4ce1bef72f0b9992d44b1`. It ran on a standard `ubuntu-latest` runner, which reported Ubuntu 24.04.5. The runner itself ran the action with `uses: ./`, through `action.yml` and this exact bundle in `dist/`, on Node.js 24.21.0. Five runs of the action passed their checks, and so did the 66 offline tests. The run was offline, with a synthetic PNG, the tests' dummy key, the stub in place of Site-Shot and the network guard. It captured no page: no capture from a GitHub runner has been made.
+- **Release**: none yet. The source is public at https://github.com/site-shot/screenshot-action, but there is no release tag, GitHub Release or GitHub Marketplace listing. Publishing to the GitHub Marketplace requires acceptance of the GitHub Marketplace Developer Agreement; Marketplace publication is pending.
 
-The run on a runner and the release are separate steps, each with its own approval and evidence. An approval for live captures has to list every capture attempt it allows, including those expected to fail and those whose outcome turns out unknown, because each one can be billed.
+The release is a separate step, with its own approval and evidence. An approval for live captures has to list every capture attempt it allows, including those expected to fail and those whose outcome turns out unknown, because each one can be billed.
 
 ## What it does, and what it does not
 
