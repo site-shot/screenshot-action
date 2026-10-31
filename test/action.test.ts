@@ -215,6 +215,20 @@ test("each kind of API failure fails the step with its own error, after one fetc
   }
 });
 
+test("a country the free plan does not cover fails the step without an HTTP status or Site-Shot's message", async (t) => {
+  // In JSON mode Site-Shot refuses such a country with HTTP 200 and `error` in
+  // the body, as the README says; only the "Geotargeting needs a paid plan"
+  // prefix is stable, the rest of the sentence will change.
+  const message = "Geotargeting needs a paid plan: DE is not on the free plan. Plans: https://www.site-shot.com/pricing/";
+  const run = await runAction(t, { inputs: { country: "DE" }, reply: json({ error: message }) });
+  const line = assertFailed(run, 1);
+  assert.ok(line.includes("(APIError)."), line);
+  assert.equal(line.includes("HTTP "), false, line);
+  assert.equal(line.includes("Geotargeting"), false, line);
+  assert.equal(line.includes("pricing"), false, line);
+  assert.deepEqual(tree(run.workspace), [], "workspace");
+});
+
 test("an answer that is not a valid PNG fails the step with no file", async (t) => {
   const damaged = Buffer.from(SCREENSHOT);
   damaged[5000] = (damaged[5000] as number) ^ 0x01;
