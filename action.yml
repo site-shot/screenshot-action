@@ -5,7 +5,7 @@ inputs:
     description: The public https:// page to capture, such as https://www.example.com/.
     required: true
   api-key:
-    description: A paid Site-Shot API key. Pass it from a GitHub Actions secret; never write the key into a workflow.
+    description: A Site-Shot API key; a confirmed account's key comes with a free API trial of 100 captures a month, unless the account has had a paid plan. Pass it from a GitHub Actions secret; never write the key into a workflow.
     required: true
   width:
     description: Viewport width in pixels, 100 to 8000.
@@ -16,7 +16,7 @@ inputs:
     required: false
     default: "768"
   country:
-    description: Optional two-letter country code, such as DE. With a country the capture is strict, and fails instead of using another country.
+    description: Optional two-letter country code, such as DE. With a country the capture is strict, and fails instead of using another country. On the free API trial only US works; other countries need a paid plan.
     required: false
     default: ""
 outputs:

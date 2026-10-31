@@ -16,9 +16,9 @@ The release is a separate step, with its own approval and evidence. An approval 
 
 ## What it does, and what it does not
 
-- **One step, one page, one capture attempt, retries disabled.** The action calls the SDK's `capture` once, with `retries: 0`, and does not try again after a failure or a damaged answer. That attempt is one HTTP request unless the API redirects it: the SDK's `fetch` follows redirects. Every capture attempt that reaches Site-Shot can count toward your plan.
-- **A paid Site-Shot API key** is required, from a GitHub Actions secret. The SDK sends it to `https://api.site-shot.com/` in the `userkey` query parameter of an HTTPS request, which is how the API authenticates; it is not sent in a header. The action masks the key in the log, and prints neither it nor the page URL, the request or Site-Shot's answer.
-- **Strict country.** When `country` is set, the capture request always carries `strict_country=1`: if Site-Shot has no capacity in that country, the step fails instead of capturing from another one, which the API would otherwise do. The code is upper-cased and sent as written, never mapped to another; Site-Shot itself reads `UK` as `GB`.
+- **One step, one page, one capture attempt, retries disabled.** The action calls the SDK's `capture` once, with `retries: 0`, and does not try again after a failure or a damaged answer. That attempt is one HTTP request unless the API redirects it: the SDK's `fetch` follows redirects. Every capture attempt that reaches Site-Shot can count toward your plan or free API trial.
+- **A Site-Shot API key** is required, from a GitHub Actions secret. A confirmed account's API key comes with a free API trial of 100 captures a month, no card needed; [paid plans](https://www.site-shot.com/pricing/) from $5/mo for 2,000 add volume. Get the key at https://www.site-shot.com/start/. An account that has had a paid plan before does not get the trial, and an account confirmed before 2026-10-30 starts it with one button on that page. The SDK sends the key to `https://api.site-shot.com/` in the `userkey` query parameter of an HTTPS request, which is how the API authenticates; it is not sent in a header. The action masks the key in the log, and prints neither it nor the page URL, the request or Site-Shot's answer.
+- **Strict country.** When `country` is set, the capture request always carries `strict_country=1`: if Site-Shot has no capacity in that country, the step fails instead of capturing from another one, which the API would otherwise do. The code is upper-cased and sent as written, never mapped to another; Site-Shot itself reads `UK` as `GB`. Trial captures come from the default location or the US; other countries need a paid plan.
 - **PNG only, checked before anything is written**: the signature, the CRC of every chunk, the header, the order of the chunks, and image data that decompresses to exactly the rows the header describes. That is all a pass means. It does not mean the page showed what you expected: the PNG may show a cookie wall, a login form, an error page or a CAPTCHA.
 - **One file**, `site-shot-output/screenshot.png` relative to the workspace, also given as the `path` output. Before anything is sent, the action refuses a `site-shot-output` that is a link or a file, and an existing `screenshot.png` of any kind. It creates the file exclusively, so it never replaces one. It never deletes a file that was there before the step and does not clean up earlier screenshots: to capture a second page in the same job, move the first file away before the second step. The one file it deletes is its own new `screenshot.png`, when writing it fails partway.
 - **A trusted runner and workspace.** The checks and the creation of the file are separate operations, and Node.js cannot make them one. A process that swaps `site-shot-output`, or a directory above it, for a link in between can make the action create an empty directory or an empty `screenshot.png` where the link leads. The action checks where the new file is before writing to it, so no image data goes there, and the step fails. It does not defend against such a process; code that runs in the same job can read the API key too, so do not run untrusted code in that job.
@@ -29,10 +29,10 @@ The release is a separate step, with its own approval and evidence. An approval 
 | Input | Required | Default | Value |
 |---|---|---|---|
 | `url` | yes | | A public `https://` page. Refused before anything is sent: other schemes, a user name or password, IP addresses, `localhost`, single-label host names, and reserved names such as `.local`, `.internal` and `.test`. Host names are not resolved: Site-Shot refuses an address it must not capture. |
-| `api-key` | yes | | A paid Site-Shot API key, from a secret. |
+| `api-key` | yes | | A Site-Shot API key, from a secret. A confirmed account's key comes with a free API trial of 100 captures a month, unless the account has had a paid plan before; an account confirmed before 2026-10-30 starts it at https://www.site-shot.com/start/. |
 | `width` | no | `1024` | Viewport width in pixels, 100 to 8000. |
 | `height` | no | `768` | Viewport height in pixels, 100 to 20000. |
-| `country` | no | | A two-letter country code (ISO 3166-1 alpha-2), such as `DE`. |
+| `country` | no | | A two-letter country code (ISO 3166-1 alpha-2), such as `DE`. On the free API trial, only `US`; other countries need a paid plan. |
 
 The output `path` is always `site-shot-output/screenshot.png`.
 
@@ -70,6 +70,7 @@ Why it looks like this:
 
 - `workflow_dispatch` runs the job only when someone with write access starts it, and every run makes a capture attempt that can be billed. A `schedule` would make one on every run.
 - Never use the action in a `pull_request_target` workflow, or in any job that checks out or runs code from a pull request: that code could read the key, and for a local action it could replace the action itself. GitHub does not pass secrets to `pull_request` runs from forks; keep it that way.
+- `country: DE` needs a paid plan. On the free API trial, leave `country` out or set it to `US`.
 - `contents: read` is for the checkout only. The action itself uses no token.
 - The output reaches the shell through `env`, not through `${{ }}` inside `run`.
 
