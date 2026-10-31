@@ -91,11 +91,10 @@ Two checks went beyond the offline tests. Each ran once, locally and not on a Gi
 
 ## Releasing
 
-Nothing has been released: there is no release tag, GitHub Release or GitHub Marketplace listing. This file plans or authorizes no run, capture or publication. Of the checks before a release, the two in "Verified locally" are done, and so is the one run of the native acceptance workflow (see "Native acceptance"). Publication remains, and it needs its own explicit approval and evidence.
+Tag `v0.1.0` marks commit `ef1cafb` (2026-10-31, on the owner's approval of the free-plan release). There is no GitHub Release or GitHub Marketplace listing. This file plans or authorizes no run, capture or publication. Of the checks before a release, the two in "Verified locally" are done, and so is the one run of the native acceptance workflow (see "Native acceptance"). Publication remains, and it needs its own explicit approval and evidence.
 
 An approval for live captures has to list every real capture attempt it allows, including attempts expected to fail and attempts whose outcome turns out unknown, such as a timeout or a lost connection, because each one can be billed.
 
-The source is public at https://github.com/site-shot/screenshot-action, with this directory at its root. Publication would still need:
-- a release tag;
+The source is public at https://github.com/site-shot/screenshot-action, with this directory at its root. A Marketplace listing would still need:
 - a check that the action's name is free on the GitHub Marketplace;
 - for a listing, acceptance of the GitHub Marketplace Developer Agreement, which GitHub requires for publishing to the Marketplace. Marketplace publication is pending.
