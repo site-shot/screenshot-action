@@ -107,6 +107,44 @@ test("full-page, no-cookie-popup, no-ads and delay are sent only when set", asyn
   assert.equal((zero.calls[0] as ActionRun["calls"][number]).url.searchParams.get("delay_time"), "0");
 });
 
+test("the path input saves the screenshot there, so a second capture in the job needs no move", async (t) => {
+  const first = join("site-shot-output", "screenshot.png");
+  const run = await runAction(t, {
+    inputs: { path: "shots/pages/home.png" },
+    arrange: (paths) => {
+      fs.mkdirSync(join(paths.workspace, "site-shot-output"));
+      fs.writeFileSync(join(paths.workspace, first), "the first capture");
+    },
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  assert.deepEqual(fs.readFileSync(join(run.workspace, "shots", "pages", "home.png")), SCREENSHOT);
+  assert.equal(fs.readFileSync(join(run.workspace, first), "utf8"), "the first capture");
+  assert.equal(run.outputs, "path=shots/pages/home.png\n");
+  assert.ok((run.lines.at(-1) ?? "").includes("to shots/pages/home.png."), run.lines.join("\n"));
+
+  const top = await runAction(t, { inputs: { path: "home.png" } });
+  assert.equal(top.code, 0, top.lines.join("\n"));
+  assert.deepEqual(tree(top.workspace), ["home.png"]);
+
+  const taken = await runAction(t, {
+    inputs: { path: "shots/home.png" },
+    arrange: (paths) => {
+      fs.mkdirSync(join(paths.workspace, "shots"));
+      fs.writeFileSync(join(paths.workspace, "shots", "home.png"), "committed");
+    },
+  });
+  const line = assertFailed(taken, 0);
+  assert.ok(line.includes("shots/home.png already exists"), line);
+  assert.equal(fs.readFileSync(join(taken.workspace, "shots", "home.png"), "utf8"), "committed");
+
+  const linked = await runAction(t, {
+    inputs: { path: "shots/deep/home.png" },
+    arrange: (paths) => fs.symlinkSync(paths.outside, join(paths.workspace, "shots")),
+  });
+  assert.ok(assertFailed(linked, 0).includes("shots/deep and every directory above it"), linked.lines.join("\n"));
+  assert.deepEqual(fs.readdirSync(linked.outside), []);
+});
+
 test("inputs are trimmed, as a YAML block scalar ends with a line break", async (t) => {
   const run = await runAction(t, {
     inputs: { url: ` ${TARGET}\n`, "api-key": `${KEY}\n`, width: " 1280 ", height: "800\n", country: " de\n" },
@@ -153,6 +191,12 @@ test("an invalid input fails before any request and leaves the workspace untouch
     [{ "no-ads": "TRUE" }, "Input no-ads"],
     [{ delay: "60001" }, "Input delay"],
     [{ delay: "2s" }, "Input delay"],
+    [{ path: "../outside.png" }, "Input path"],
+    [{ path: "/tmp/screenshot.png" }, "Input path"],
+    [{ path: ".git/screenshot.png" }, "Input path"],
+    [{ path: "shots//home.png" }, "Input path"],
+    [{ path: "shots/home.jpg" }, "Input path"],
+    [{ path: "shots\\home.png" }, "Input path"],
     [{ "api-key": "" }, "Input api-key"],
     [{ "api-key": "two words" }, "Input api-key"],
   ];

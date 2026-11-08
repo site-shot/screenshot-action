@@ -25,6 +25,7 @@ import {
   parseCountry,
   parseDelay,
   parseDimension,
+  parseOutputPath,
   parsePageUrl,
   parseSwitch,
 } from "./inputs.ts";
@@ -60,6 +61,8 @@ const CAPTURE_ERRORS = [
 interface Capture {
   apiKey: string;
   options: CaptureOptions;
+  /** The `path` input: relative to the workspace, with forward slashes. */
+  path: string;
   destination: Destination;
   outputs: string;
 }
@@ -102,7 +105,7 @@ export async function run(env: Env, print: (line: string) => void): Promise<numb
   let size: PngSize;
   try {
     size = checkPng(png, { maxWidth: VIEWPORT.width.max, maxHeight: VIEWPORT.height.max });
-    writeScreenshot(capture.destination, png);
+    writeScreenshot(capture.destination, png, capture.path);
   } catch (error) {
     const message =
       error instanceof PngError
@@ -113,12 +116,12 @@ export async function run(env: Env, print: (line: string) => void): Promise<numb
   }
 
   try {
-    setOutput(capture.outputs, "path", OUTPUT_PATH);
+    setOutput(capture.outputs, "path", capture.path);
   } catch {
-    print(command("error", `The screenshot was saved to ${OUTPUT_PATH}, but the path output could not be added to GITHUB_OUTPUT.`));
+    print(command("error", `The screenshot was saved to ${capture.path}, but the path output could not be added to GITHUB_OUTPUT.`));
     return 1;
   }
-  print(`Saved a ${size.width}x${size.height} PNG (${png.length} bytes) to ${OUTPUT_PATH}.`);
+  print(`Saved a ${size.width}x${size.height} PNG (${png.length} bytes) to ${capture.path}.`);
   return 0;
 }
 
@@ -141,11 +144,13 @@ function prepare(env: Env, apiKey: string): Capture {
   if (parseSwitch("no-ads", getInput(env, "no-ads"))) options.no_ads = 1;
   const delay = parseDelay(getInput(env, "delay"));
   if (delay !== undefined) options.delay_time = delay;
+  const path = parseOutputPath(getInput(env, "path"), OUTPUT_PATH);
   return {
     apiKey: parseApiKey(apiKey),
     options,
+    path,
     outputs: outputFile(env),
-    destination: prepareDestination(env.GITHUB_WORKSPACE),
+    destination: prepareDestination(env.GITHUB_WORKSPACE, path),
   };
 }
 

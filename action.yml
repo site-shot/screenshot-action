@@ -35,9 +35,13 @@ inputs:
     description: Optional wait before the capture, in milliseconds, 0 to 60000. Empty uses Site-Shot's default of 500.
     required: false
     default: ""
+  path:
+    description: Where to save the PNG, relative to the workspace, ending in .png, such as screenshots/home.png. Missing directories are created; an existing file is never replaced, and the step fails before any capture instead.
+    required: false
+    default: site-shot-output/screenshot.png
 outputs:
   path:
-    description: The saved PNG, relative to the workspace. Always site-shot-output/screenshot.png.
+    description: The saved PNG, relative to the workspace, as given in the path input.
 runs:
   using: node24
   main: dist/index.mjs

@@ -387,6 +387,17 @@ function parseDelay(value) {
   }
   return ms;
 }
+function parseOutputPath(value, fallback) {
+  if (value === "") return fallback;
+  const parts = value.split("/");
+  if (parts.length > 16 || !parts.every((part) => /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}$/.test(part)) || !/\.png$/.test(value)) {
+    throw new InputError(
+      "path",
+      "Input path must be a relative path inside the workspace that ends in .png, such as screenshots/home.png, with no part that starts with a dot."
+    );
+  }
+  return value;
+}
 function parseCountry(value) {
   if (value === "") return void 0;
   if (!/^[A-Za-z]{2}$/.test(value)) {
@@ -401,49 +412,68 @@ function parseCountry(value) {
 
 // src/output.ts
 import fs from "node:fs";
-import { isAbsolute, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 var OUTPUT_DIRECTORY = "site-shot-output";
 var OUTPUT_FILE = "screenshot.png";
 var OUTPUT_PATH = `${OUTPUT_DIRECTORY}/${OUTPUT_FILE}`;
-var PROBLEMS = {
-  workspace: "GITHUB_WORKSPACE must be the absolute path of an existing directory: run the action as a step of a GitHub Actions job.",
-  directory: `${OUTPUT_DIRECTORY} in the workspace must be a real directory that the action can read, not a link or a file.`,
-  exists: `${OUTPUT_PATH} already exists, and the action never replaces a file: move or delete it before this step.`,
-  changed: "The workspace changed while the screenshot was being saved, so the screenshot was not created.",
-  diverted: `The workspace changed while the screenshot was being saved: the new ${OUTPUT_FILE} did not end up in the ${OUTPUT_DIRECTORY} directory that was checked, so it was left empty, without image data.`,
-  write: `The screenshot could not be written to ${OUTPUT_PATH}.`
-};
+function describeProblem(reason, path) {
+  const folder = path.includes("/") ? dirname(path) : "The workspace";
+  switch (reason) {
+    case "workspace":
+      return "GITHUB_WORKSPACE must be the absolute path of an existing directory: run the action as a step of a GitHub Actions job.";
+    case "directory":
+      return `${folder} and every directory above it in the workspace must be a real directory that the action can read, not a link or a file.`;
+    case "exists":
+      return `${path} already exists, and the action never replaces a file: move or delete it before this step, or choose another path.`;
+    case "changed":
+      return "The workspace changed while the screenshot was being saved, so the screenshot was not created.";
+    case "diverted":
+      return `The workspace changed while the screenshot was being saved: the new file did not end up at ${path}, the place that was checked, so it was left empty, without image data.`;
+    case "write":
+      return `The screenshot could not be written to ${path}.`;
+  }
+}
 var OutputError = class extends Error {
   reason;
-  constructor(reason) {
-    super(PROBLEMS[reason]);
+  constructor(reason, path = OUTPUT_PATH) {
+    super(describeProblem(reason, path));
     this.name = "OutputError";
     this.reason = reason;
   }
 };
-function prepareDestination(workspace) {
+function prepareDestination(workspace, path = OUTPUT_PATH) {
   const root = workspace && isAbsolute(workspace) ? realDirectory(workspace) : void 0;
-  if (root === void 0) throw new OutputError("workspace");
-  const destination = { directory: join(root, OUTPUT_DIRECTORY), file: join(root, OUTPUT_DIRECTORY, OUTPUT_FILE) };
-  let directory;
+  if (root === void 0) throw new OutputError("workspace", path);
+  const parts = path.split("/");
+  const destination = { directory: join(root, ...parts.slice(0, -1)), file: join(root, ...parts) };
   let file;
   try {
-    directory = fs.lstatSync(destination.directory, { throwIfNoEntry: false });
-    file = directory?.isDirectory() ? fs.lstatSync(destination.file, { throwIfNoEntry: false }) : void 0;
-  } catch {
-    throw new OutputError("directory");
+    let current = root;
+    let complete = true;
+    for (const part of parts.slice(0, -1)) {
+      current = join(current, part);
+      const directory = fs.lstatSync(current, { throwIfNoEntry: false });
+      if (directory === void 0) {
+        complete = false;
+        break;
+      }
+      if (!directory.isDirectory()) throw new OutputError("directory", path);
+    }
+    file = complete ? fs.lstatSync(destination.file, { throwIfNoEntry: false }) : void 0;
+  } catch (error) {
+    if (error instanceof OutputError) throw error;
+    throw new OutputError("directory", path);
   }
-  if (directory !== void 0 && !directory.isDirectory()) throw new OutputError("directory");
-  if (file !== void 0) throw new OutputError("exists");
+  if (file !== void 0) throw new OutputError("exists", path);
   return destination;
 }
-function writeScreenshot(destination, png) {
-  const directory = ensureDirectory(destination.directory);
+function writeScreenshot(destination, png, path = OUTPUT_PATH) {
+  const directory = ensureDirectory(destination.directory, path);
   let fd;
   try {
     fd = fs.openSync(destination.file, "wx", 420);
   } catch (error) {
-    throw new OutputError(errorCode(error) === "EEXIST" ? "exists" : "write");
+    throw new OutputError(errorCode(error) === "EEXIST" ? "exists" : "write", path);
   }
   let file;
   let problem;
@@ -460,7 +490,7 @@ function writeScreenshot(destination, png) {
     fs.closeSync(fd);
   }
   if (problem === "write" && file !== void 0 && isAt(destination.file, file)) fs.unlinkSync(destination.file);
-  if (problem !== void 0) throw new OutputError(problem);
+  if (problem !== void 0) throw new OutputError(problem, path);
 }
 function realDirectory(path) {
   try {
@@ -470,9 +500,9 @@ function realDirectory(path) {
     return void 0;
   }
 }
-function ensureDirectory(path) {
+function ensureDirectory(path, output) {
   try {
-    fs.mkdirSync(path);
+    fs.mkdirSync(path, { recursive: true });
   } catch {
   }
   let directory;
@@ -481,10 +511,10 @@ function ensureDirectory(path) {
     directory = fs.lstatSync(path);
     real = fs.realpathSync(path);
   } catch {
-    throw new OutputError("directory");
+    throw new OutputError("directory", output);
   }
-  if (!directory.isDirectory()) throw new OutputError("directory");
-  if (real !== path) throw new OutputError("changed");
+  if (!directory.isDirectory()) throw new OutputError("directory", output);
+  if (real !== path) throw new OutputError("changed", output);
   return directory;
 }
 function isAt(path, expected) {
@@ -526,7 +556,7 @@ var ADAM7 = [
   [0, 1, 1, 2]
 ];
 var SINGLE_PASS = [[0, 0, 1, 1]];
-var PROBLEMS2 = {
+var PROBLEMS = {
   "not-png": "it is not a PNG image",
   truncated: "the PNG is incomplete",
   crc: "a PNG chunk failed its CRC check",
@@ -537,7 +567,7 @@ var PROBLEMS2 = {
 var PngError = class extends Error {
   problem;
   constructor(problem) {
-    super(PROBLEMS2[problem]);
+    super(PROBLEMS[problem]);
     this.name = "PngError";
     this.problem = problem;
   }
@@ -716,19 +746,19 @@ async function run(env, print2) {
   let size;
   try {
     size = checkPng(png, { maxWidth: VIEWPORT.width.max, maxHeight: VIEWPORT.height.max });
-    writeScreenshot(capture.destination, png);
+    writeScreenshot(capture.destination, png, capture.path);
   } catch (error) {
     const message = error instanceof PngError ? `Site-Shot answered with an image that failed PNG validation: ${error.message}. Nothing was saved.` : `${describe(error)} The capture was made and may count toward the plan, but it was not saved.`;
     print2(command("error", message));
     return 1;
   }
   try {
-    setOutput(capture.outputs, "path", OUTPUT_PATH);
+    setOutput(capture.outputs, "path", capture.path);
   } catch {
-    print2(command("error", `The screenshot was saved to ${OUTPUT_PATH}, but the path output could not be added to GITHUB_OUTPUT.`));
+    print2(command("error", `The screenshot was saved to ${capture.path}, but the path output could not be added to GITHUB_OUTPUT.`));
     return 1;
   }
-  print2(`Saved a ${size.width}x${size.height} PNG (${png.length} bytes) to ${OUTPUT_PATH}.`);
+  print2(`Saved a ${size.width}x${size.height} PNG (${png.length} bytes) to ${capture.path}.`);
   return 0;
 }
 function prepare(env, apiKey) {
@@ -748,11 +778,13 @@ function prepare(env, apiKey) {
   if (parseSwitch("no-ads", getInput(env, "no-ads"))) options.no_ads = 1;
   const delay = parseDelay(getInput(env, "delay"));
   if (delay !== void 0) options.delay_time = delay;
+  const path = parseOutputPath(getInput(env, "path"), OUTPUT_PATH);
   return {
     apiKey: parseApiKey(apiKey),
     options,
+    path,
     outputs: outputFile(env),
-    destination: prepareDestination(env.GITHUB_WORKSPACE)
+    destination: prepareDestination(env.GITHUB_WORKSPACE, path)
   };
 }
 function describe(error) {

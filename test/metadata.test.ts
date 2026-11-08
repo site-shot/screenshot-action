@@ -56,6 +56,7 @@ test("action.yml declares the action's inputs, required ones without defaults, a
     "no-cookie-popup",
     "no-ads",
     "delay",
+    "path",
   ]);
   for (const name of ["url", "api-key"]) {
     assert.equal(METADATA.inputs[name]?.required, true, name);

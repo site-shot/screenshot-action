@@ -18,7 +18,8 @@ export type InputName =
   | "full-page"
   | "no-cookie-popup"
   | "no-ads"
-  | "delay";
+  | "delay"
+  | "path";
 
 export class InputError extends Error {
   readonly input: InputName;
@@ -114,6 +115,23 @@ export function parseDelay(value: string): number | undefined {
     throw new InputError("delay", "Input delay must be empty or a whole number of milliseconds from 0 to 60000.");
   }
   return ms;
+}
+
+/**
+ * The file to save, relative to the workspace, with forward slashes: names of
+ * letters, digits, `.`, `_` and `-` that do not start with a dot, the last one
+ * ending in `.png`. Empty is the default.
+ */
+export function parseOutputPath(value: string, fallback: string): string {
+  if (value === "") return fallback;
+  const parts = value.split("/");
+  if (parts.length > 16 || !parts.every((part) => /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}$/.test(part)) || !/\.png$/.test(value)) {
+    throw new InputError(
+      "path",
+      "Input path must be a relative path inside the workspace that ends in .png, such as screenshots/home.png, with no part that starts with a dot.",
+    );
+  }
+  return value;
 }
 
 /** Returns the code upper-cased, or undefined for no country. */
