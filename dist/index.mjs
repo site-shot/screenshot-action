@@ -813,8 +813,7 @@ function explain(error, options, code) {
     return "Site-Shot could not open the page: check that its host name resolves and that the site is reachable from the internet";
   }
   if (error instanceof QuotaError) {
-    const foreign = options.country !== void 0 && options.country !== "US";
-    if (/geotargeting needs a paid plan/i.test(text) || foreign && error.httpStatus === 200) {
+    if (/geotargeting needs a paid plan/i.test(text)) {
       return `Site-Shot refused country ${String(options.country)}: the free plan captures from the default location or the US only, and a country other than US needs a paid plan (${PRICING}); the refused attempt counts toward the month's captures`;
     }
     if (/free plan used up|free api trial used up/i.test(text)) {

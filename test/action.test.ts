@@ -303,6 +303,20 @@ test("a country the free plan does not cover fails the step with a line that say
   assert.deepEqual(tree(run.workspace), [], "workspace");
 });
 
+test("with a country set, a refusal for another reason is not reported as a country refusal", async (t) => {
+  const used = "Free plan used up: 100 captures this month. It renews on 2026-11-30 (UTC).";
+  const cases: [string, string, string[]][] = [
+    ["free plan used up", used, ["renews on 2026-11-30 (UTC)", "(QuotaError)."]],
+    ["no subscription", "No active subscription found", ["https://www.site-shot.com/start/", "(QuotaError)."]],
+  ];
+  for (const [label, message, expected] of cases) {
+    const run = await runAction(t, { inputs: { country: "DE" }, reply: json({ error: message }) });
+    const line = assertFailed(run, 1);
+    for (const part of expected) assert.ok(line.includes(part), `${label}: ${line}`);
+    assert.equal(line.includes("refused country"), false, `${label}: ${line}`);
+  }
+});
+
 test("the answers Site-Shot words in a known way get a line that says what to do, without Site-Shot's text", async (t) => {
   const used =
     "Free plan used up: 100 captures this month. It renews on 2026-11-30 (UTC). A paid plan switches this key back on now; paid plans start at $5/month for 2,000 captures: https://www.site-shot.com/pricing/";

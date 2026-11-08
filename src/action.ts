@@ -193,8 +193,7 @@ function explain(error: SiteShotError, options: CaptureOptions, code: string | u
   }
   if (error instanceof QuotaError) {
     // In JSON mode the refusal is HTTP 200 with the reason in `error`.
-    const foreign = options.country !== undefined && options.country !== "US";
-    if (/geotargeting needs a paid plan/i.test(text) || (foreign && error.httpStatus === 200)) {
+    if (/geotargeting needs a paid plan/i.test(text)) {
       return `Site-Shot refused country ${String(options.country)}: the free plan captures from the default location or the US only, and a country other than US needs a paid plan (${PRICING}); the refused attempt counts toward the month's captures`;
     }
     if (/free plan used up|free api trial used up/i.test(text)) {
