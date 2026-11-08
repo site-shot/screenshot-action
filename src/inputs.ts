@@ -29,7 +29,10 @@ const NON_PUBLIC_TLDS = new Set(["alt", "arpa", "example", "internal", "invalid"
 
 export function parseApiKey(value: string): string {
   if (value === "") {
-    throw new InputError("api-key", "Input api-key is required: pass a paid Site-Shot API key from a GitHub Actions secret.");
+    throw new InputError(
+      "api-key",
+      "Input api-key is empty: store your Site-Shot API key as a repository secret and pass it with api-key: ${{ secrets.SITESHOT_API_KEY }}. A confirmed account's key comes with the free plan, 100 captures a month; get it at https://www.site-shot.com/start/.",
+    );
   }
   if (WHITESPACE_OR_CONTROL.test(value)) {
     throw new InputError("api-key", "Input api-key must be one API key, without spaces or line breaks.");
@@ -73,11 +76,29 @@ export function parseDimension(name: "width" | "height", value: string): number 
   return pixels;
 }
 
+// The 249 officially assigned ISO 3166-1 alpha-2 codes, and UK, which
+// Site-Shot itself reads as GB.
+const COUNTRIES = new Set(
+  (
+    "AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ " +
+    "CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR " +
+    "GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO " +
+    "JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR " +
+    "MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO " +
+    "RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV " +
+    "TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW UK"
+  ).split(" "),
+);
+
 /** Returns the code upper-cased, or undefined for no country. */
 export function parseCountry(value: string): string | undefined {
   if (value === "") return undefined;
   if (!/^[A-Za-z]{2}$/.test(value)) {
     throw new InputError("country", "Input country must be empty or a two-letter country code, such as DE.");
   }
-  return value.toUpperCase();
+  const code = value.toUpperCase();
+  if (!COUNTRIES.has(code)) {
+    throw new InputError("country", "Input country must be an ISO 3166-1 alpha-2 country code, such as US or DE.");
+  }
+  return code;
 }

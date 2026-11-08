@@ -124,6 +124,23 @@ test("a country is two ASCII letters, upper-cased and otherwise sent as given", 
   assert.equal(parseCountry("UK"), "UK");
 });
 
+test("two letters that are not an ISO 3166-1 alpha-2 country code are refused", () => {
+  for (const value of ["ZZ", "zz", "AA", "XX", "EU", "UN", "XK", "QO"]) {
+    assert.throws(() => parseCountry(value), refused("country"), value);
+  }
+  for (const value of ["US", "us", "FR", "JP", "BR", "AX", "SS", "BQ"]) assert.equal(parseCountry(value), value.toUpperCase());
+});
+
+test("an empty API key gets a line that says where to store it and where to get one", () => {
+  assert.throws(
+    () => parseApiKey(""),
+    (error: Error) =>
+      error.message.includes("${{ secrets.SITESHOT_API_KEY }}") &&
+      error.message.includes("https://www.site-shot.com/start/") &&
+      !error.message.includes("paid"),
+  );
+});
+
 test("a country that is not two ASCII letters is refused", () => {
   for (const value of ["D", "DEU", "D1", "1D", "D-", "Germany", "ÄÖ", "D E"]) {
     assert.throws(() => parseCountry(value), refused("country"), value);
