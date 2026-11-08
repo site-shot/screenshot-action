@@ -45,8 +45,18 @@ test("action.yml declares a node24 JavaScript action that runs the bundle and no
   assert.deepEqual(METADATA.runs, { using: "node24", main: "dist/index.mjs" });
 });
 
-test("action.yml declares the action's five inputs, required ones without defaults, and its one output", () => {
-  assert.deepEqual(Object.keys(METADATA.inputs), ["url", "api-key", "width", "height", "country"]);
+test("action.yml declares the action's inputs, required ones without defaults, and its one output", () => {
+  assert.deepEqual(Object.keys(METADATA.inputs), [
+    "url",
+    "api-key",
+    "width",
+    "height",
+    "country",
+    "full-page",
+    "no-cookie-popup",
+    "no-ads",
+    "delay",
+  ]);
   for (const name of ["url", "api-key"]) {
     assert.equal(METADATA.inputs[name]?.required, true, name);
     // A default API key would be a secret written into the action itself.

@@ -9,7 +9,16 @@ export const VIEWPORT = {
   height: { min: 100, max: 20000 },
 } as const;
 
-export type InputName = "url" | "api-key" | "width" | "height" | "country";
+export type InputName =
+  | "url"
+  | "api-key"
+  | "width"
+  | "height"
+  | "country"
+  | "full-page"
+  | "no-cookie-popup"
+  | "no-ads"
+  | "delay";
 
 export class InputError extends Error {
   readonly input: InputName;
@@ -89,6 +98,23 @@ const COUNTRIES = new Set(
     "TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW UK"
   ).split(" "),
 );
+
+/** A switch: `true` or `false`, as YAML writes them; empty is false. */
+export function parseSwitch(name: "full-page" | "no-cookie-popup" | "no-ads", value: string): boolean {
+  if (value === "" || value === "false") return false;
+  if (value === "true") return true;
+  throw new InputError(name, `Input ${name} must be true or false.`);
+}
+
+/** The wait before the capture in milliseconds, 0 to 60000, or undefined for Site-Shot's default. */
+export function parseDelay(value: string): number | undefined {
+  if (value === "") return undefined;
+  const ms = /^(0|[1-9][0-9]*)$/.test(value) ? Number(value) : Number.NaN;
+  if (!(ms >= 0 && ms <= 60000)) {
+    throw new InputError("delay", "Input delay must be empty or a whole number of milliseconds from 0 to 60000.");
+  }
+  return ms;
+}
 
 /** Returns the code upper-cased, or undefined for no country. */
 export function parseCountry(value: string): string | undefined {

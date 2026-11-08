@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseApiKey, parseCountry, parseDimension, parsePageUrl } from "../src/inputs.ts";
+import { parseApiKey, parseCountry, parseDelay, parseDimension, parsePageUrl, parseSwitch } from "../src/inputs.ts";
 
 function refused(input: string) {
   return { name: "InputError", input };
@@ -144,6 +144,24 @@ test("an empty API key gets a line that says where to store it and where to get 
 test("a country that is not two ASCII letters is refused", () => {
   for (const value of ["D", "DEU", "D1", "1D", "D-", "Germany", "ÄÖ", "D E"]) {
     assert.throws(() => parseCountry(value), refused("country"), value);
+  }
+});
+
+test("a switch is true or false, and empty is false", () => {
+  assert.equal(parseSwitch("full-page", ""), false);
+  assert.equal(parseSwitch("full-page", "false"), false);
+  assert.equal(parseSwitch("no-ads", "true"), true);
+  for (const value of ["yes", "1", "TRUE", "on", "true false"]) {
+    assert.throws(() => parseSwitch("no-cookie-popup", value), refused("no-cookie-popup"), value);
+  }
+});
+
+test("a delay is empty or whole milliseconds from 0 to 60000", () => {
+  assert.equal(parseDelay(""), undefined);
+  assert.equal(parseDelay("0"), 0);
+  assert.equal(parseDelay("60000"), 60000);
+  for (const value of ["-1", "60001", "00", "1.5", "2s", "1e3", " 5"]) {
+    assert.throws(() => parseDelay(value), refused("delay"), value);
   }
 });
 

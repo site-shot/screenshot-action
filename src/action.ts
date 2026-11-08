@@ -18,7 +18,16 @@ import {
   type SiteShotError,
 } from "site-shot-sdk";
 
-import { InputError, VIEWPORT, parseApiKey, parseCountry, parseDimension, parsePageUrl } from "./inputs.ts";
+import {
+  InputError,
+  VIEWPORT,
+  parseApiKey,
+  parseCountry,
+  parseDelay,
+  parseDimension,
+  parsePageUrl,
+  parseSwitch,
+} from "./inputs.ts";
 import { OUTPUT_PATH, OutputError, prepareDestination, writeScreenshot, type Destination } from "./output.ts";
 import { PngError, checkPng, type PngSize } from "./png.ts";
 import { RunnerError, command, getInput, outputFile, setOutput, type Env } from "./runner.ts";
@@ -70,9 +79,15 @@ export async function run(env: Env, print: (line: string) => void): Promise<numb
   }
 
   const { options } = capture;
-  const country = options.country === undefined ? "" : `, country ${String(options.country)} (strict)`;
+  const settings = [
+    options.full_size === 1 ? "full page" : "",
+    options.country === undefined ? "" : `country ${String(options.country)} (strict)`,
+    options.no_cookie_popup === 1 ? "cookie banners removed" : "",
+    options.no_ads === 1 ? "ads removed" : "",
+    options.delay_time === undefined ? "" : `delay ${String(options.delay_time)} ms`,
+  ].flatMap((setting) => (setting === "" ? [] : [`, ${setting}`]));
   print(
-    `Capturing one page with Site-Shot at ${options.width}x${options.height}${country}: one capture attempt, retries disabled.`,
+    `Capturing one page with Site-Shot at ${options.width}x${options.height}${settings.join("")}: one capture attempt, retries disabled.`,
   );
   let png: Buffer;
   try {
@@ -114,12 +129,18 @@ function prepare(env: Env, apiKey: string): Capture {
     height: parseDimension("height", getInput(env, "height")),
     format: "png",
   };
+  // A switch that is off and an empty delay are not sent: Site-Shot's defaults apply.
+  if (parseSwitch("full-page", getInput(env, "full-page"))) options.full_size = 1;
   const country = parseCountry(getInput(env, "country"));
   if (country !== undefined) {
     // Strict, always: without it the API would fall back to another country.
     options.country = country;
     options.strict_country = 1;
   }
+  if (parseSwitch("no-cookie-popup", getInput(env, "no-cookie-popup"))) options.no_cookie_popup = 1;
+  if (parseSwitch("no-ads", getInput(env, "no-ads"))) options.no_ads = 1;
+  const delay = parseDelay(getInput(env, "delay"));
+  if (delay !== undefined) options.delay_time = delay;
   return {
     apiKey: parseApiKey(apiKey),
     options,

@@ -374,6 +374,19 @@ function parseDimension(name, value) {
 var COUNTRIES = new Set(
   "AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW UK".split(" ")
 );
+function parseSwitch(name, value) {
+  if (value === "" || value === "false") return false;
+  if (value === "true") return true;
+  throw new InputError(name, `Input ${name} must be true or false.`);
+}
+function parseDelay(value) {
+  if (value === "") return void 0;
+  const ms = /^(0|[1-9][0-9]*)$/.test(value) ? Number(value) : Number.NaN;
+  if (!(ms >= 0 && ms <= 6e4)) {
+    throw new InputError("delay", "Input delay must be empty or a whole number of milliseconds from 0 to 60000.");
+  }
+  return ms;
+}
 function parseCountry(value) {
   if (value === "") return void 0;
   if (!/^[A-Za-z]{2}$/.test(value)) {
@@ -683,9 +696,15 @@ async function run(env, print2) {
     return 1;
   }
   const { options } = capture;
-  const country = options.country === void 0 ? "" : `, country ${String(options.country)} (strict)`;
+  const settings = [
+    options.full_size === 1 ? "full page" : "",
+    options.country === void 0 ? "" : `country ${String(options.country)} (strict)`,
+    options.no_cookie_popup === 1 ? "cookie banners removed" : "",
+    options.no_ads === 1 ? "ads removed" : "",
+    options.delay_time === void 0 ? "" : `delay ${String(options.delay_time)} ms`
+  ].flatMap((setting) => setting === "" ? [] : [`, ${setting}`]);
   print2(
-    `Capturing one page with Site-Shot at ${options.width}x${options.height}${country}: one capture attempt, retries disabled.`
+    `Capturing one page with Site-Shot at ${options.width}x${options.height}${settings.join("")}: one capture attempt, retries disabled.`
   );
   let png;
   try {
@@ -719,11 +738,16 @@ function prepare(env, apiKey) {
     height: parseDimension("height", getInput(env, "height")),
     format: "png"
   };
+  if (parseSwitch("full-page", getInput(env, "full-page"))) options.full_size = 1;
   const country = parseCountry(getInput(env, "country"));
   if (country !== void 0) {
     options.country = country;
     options.strict_country = 1;
   }
+  if (parseSwitch("no-cookie-popup", getInput(env, "no-cookie-popup"))) options.no_cookie_popup = 1;
+  if (parseSwitch("no-ads", getInput(env, "no-ads"))) options.no_ads = 1;
+  const delay = parseDelay(getInput(env, "delay"));
+  if (delay !== void 0) options.delay_time = delay;
   return {
     apiKey: parseApiKey(apiKey),
     options,

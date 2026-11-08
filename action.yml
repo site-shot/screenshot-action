@@ -19,6 +19,22 @@ inputs:
     description: Optional two-letter country code, such as DE. With a country the capture is strict, and fails instead of using another country. On the free plan only US works; Site-Shot refuses any other country, the step fails, and the refused attempt still counts toward the month's 100. Other countries need a paid plan.
     required: false
     default: ""
+  full-page:
+    description: true to capture the whole scrollable page, up to 20000 pixels high, instead of the viewport only.
+    required: false
+    default: "false"
+  no-cookie-popup:
+    description: true to have Site-Shot remove cookie-consent banners before the capture.
+    required: false
+    default: "false"
+  no-ads:
+    description: true to have Site-Shot remove ads before the capture.
+    required: false
+    default: "false"
+  delay:
+    description: Optional wait before the capture, in milliseconds, 0 to 60000. Empty uses Site-Shot's default of 500.
+    required: false
+    default: ""
 outputs:
   path:
     description: The saved PNG, relative to the workspace. Always site-shot-output/screenshot.png.

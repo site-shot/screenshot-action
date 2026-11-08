@@ -84,6 +84,29 @@ test("width, height and country are sent as given, the country always with stric
   assert.equal(plain.has("strict_country"), false);
 });
 
+test("full-page, no-cookie-popup, no-ads and delay are sent only when set", async (t) => {
+  const run = await runAction(t, {
+    inputs: { "full-page": "true", "no-cookie-popup": "true", "no-ads": "true", delay: "2000", country: "us" },
+  });
+  assert.equal(run.code, 0, run.lines.join("\n"));
+  assert.equal(
+    run.lines[1],
+    "Capturing one page with Site-Shot at 1024x768, full page, country US (strict), cookie banners removed, ads removed, delay 2000 ms: one capture attempt, retries disabled.",
+  );
+  const params = (run.calls[0] as ActionRun["calls"][number]).url.searchParams;
+  assert.deepEqual(
+    ["full_size", "no_cookie_popup", "no_ads", "delay_time"].map((name) => params.getAll(name)),
+    [["1"], ["1"], ["1"], ["2000"]],
+  );
+
+  const off = await runAction(t, { inputs: { "full-page": "false", "no-cookie-popup": "false", "no-ads": "false", delay: "" } });
+  assert.equal(off.code, 0, off.lines.join("\n"));
+  const plain = (off.calls[0] as ActionRun["calls"][number]).url.searchParams;
+  for (const name of ["full_size", "no_cookie_popup", "no_ads", "delay_time"]) assert.equal(plain.has(name), false, name);
+  const zero = await runAction(t, { inputs: { delay: "0" } });
+  assert.equal((zero.calls[0] as ActionRun["calls"][number]).url.searchParams.get("delay_time"), "0");
+});
+
 test("inputs are trimmed, as a YAML block scalar ends with a line break", async (t) => {
   const run = await runAction(t, {
     inputs: { url: ` ${TARGET}\n`, "api-key": `${KEY}\n`, width: " 1280 ", height: "800\n", country: " de\n" },
@@ -124,6 +147,12 @@ test("an invalid input fails before any request and leaves the workspace untouch
     [{ width: "wide" }, "Input width"],
     [{ height: "20001" }, "Input height"],
     [{ country: "DEU" }, "Input country"],
+    [{ country: "ZZ" }, "Input country"],
+    [{ "full-page": "yes" }, "Input full-page"],
+    [{ "no-cookie-popup": "1" }, "Input no-cookie-popup"],
+    [{ "no-ads": "TRUE" }, "Input no-ads"],
+    [{ delay: "60001" }, "Input delay"],
+    [{ delay: "2s" }, "Input delay"],
     [{ "api-key": "" }, "Input api-key"],
     [{ "api-key": "two words" }, "Input api-key"],
   ];
