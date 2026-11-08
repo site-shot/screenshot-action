@@ -36,7 +36,7 @@ jobs:
         shell: bash
     env:
       # The accepted bundle: the job stops if the checkout holds another one.
-      ACCEPTED_BUNDLE_SHA256: f10db86c7e6d38046947690d71f469f8769c19b12f52994180cab78e29f8310c
+      ACCEPTED_BUNDLE_SHA256: 142da15b505cb3753d9e0c4ec7e06889d5ba7ab1c1b1a7d4b4e7e020620cb498
     steps:
       # Both actions are pinned to a full commit SHA.
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
