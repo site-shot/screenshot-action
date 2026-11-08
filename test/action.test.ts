@@ -57,8 +57,8 @@ test("captures the page with one fetch call through the installed SDK and saves 
     ["userkey", KEY],
     ["width", "1024"],
   ]);
-  // The request comes from the installed site-shot-sdk 0.2.0, not from the action.
-  assert.deepEqual(call.init?.headers, { accept: "application/json", "user-agent": "site-shot-sdk/0.2.0 node" });
+  // The request comes from the installed site-shot-sdk 0.2.1, not from the action.
+  assert.deepEqual(call.init?.headers, { accept: "application/json", "user-agent": "site-shot-sdk/0.2.1 node" });
 
   assert.deepEqual(tree(run.workspace), ["site-shot-output", OUTPUT]);
   assert.deepEqual(fs.readFileSync(join(run.workspace, OUTPUT)), SCREENSHOT);
@@ -215,17 +215,18 @@ test("each kind of API failure fails the step with its own error, after one fetc
   }
 });
 
-test("a country the free plan does not cover fails the step without an HTTP status or Site-Shot's message", async (t) => {
+test("a country the free plan does not cover fails the step with a line that says so, without Site-Shot's message", async (t) => {
   // In JSON mode Site-Shot refuses such a country with HTTP 200 and `error` in
   // the body, as the README says; only the "Geotargeting needs a paid plan"
   // prefix is stable, the rest of the sentence will change.
-  const message = "Geotargeting needs a paid plan: DE is not on the free plan. Plans: https://www.site-shot.com/pricing/";
+  const message = "Geotargeting needs a paid plan: MARKER-REST-OF-SENTENCE. Plans: https://www.site-shot.com/pricing/";
   const run = await runAction(t, { inputs: { country: "DE" }, reply: json({ error: message }) });
   const line = assertFailed(run, 1);
-  assert.ok(line.includes("(APIError)."), line);
+  assert.ok(line.includes("(QuotaError)."), line);
+  assert.ok(line.includes("Site-Shot refused country DE"), line);
+  assert.ok(line.includes("a country other than US needs a paid plan (https://www.site-shot.com/pricing/)"), line);
   assert.equal(line.includes("HTTP "), false, line);
-  assert.equal(line.includes("Geotargeting"), false, line);
-  assert.equal(line.includes("pricing"), false, line);
+  assert.equal(line.includes("MARKER-REST-OF-SENTENCE"), false, line);
   assert.deepEqual(tree(run.workspace), [], "workspace");
 });
 

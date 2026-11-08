@@ -55,18 +55,18 @@ test("action.yml declares the action's five inputs, required ones without defaul
   assert.deepEqual(Object.keys(METADATA.outputs), ["path"]);
 });
 
-test("the SDK is site-shot-sdk 0.2.0, locked to the reviewed registry artifact, and the package cannot be published", () => {
+test("the SDK is site-shot-sdk 0.2.1, locked to the reviewed registry artifact, and the package cannot be published", () => {
   const manifest = JSON.parse(read("package.json"));
   assert.equal(manifest.private, true);
-  assert.deepEqual(manifest.dependencies, { "site-shot-sdk": "0.2.0" });
+  assert.deepEqual(manifest.dependencies, { "site-shot-sdk": "0.2.1" });
   const locked = JSON.parse(read("package-lock.json")).packages["node_modules/site-shot-sdk"];
-  assert.equal(locked.version, "0.2.0");
-  assert.equal(locked.resolved, "https://registry.npmjs.org/site-shot-sdk/-/site-shot-sdk-0.2.0.tgz");
+  assert.equal(locked.version, "0.2.1");
+  assert.equal(locked.resolved, "https://registry.npmjs.org/site-shot-sdk/-/site-shot-sdk-0.2.1.tgz");
   assert.equal(
     locked.integrity,
-    "sha512-ctHA/2va7FFEdF1daLGG9bIeq/ycSDJvh5N1yt0aJVg0A1GTIEELLdGQZIxPK+b0ky0UbDJsoBX10G7dV6K3Sg==",
+    "sha512-qpQqLVscDNAVNmee5tMR8ku0K+hy+cjvR8XxGfC2ojBsCNdvPpYPX7epZ3fLjD1rN7+I3q4SXXYz3tCriP5BOg==",
   );
-  assert.equal(JSON.parse(read("node_modules/site-shot-sdk/package.json")).version, "0.2.0");
+  assert.equal(JSON.parse(read("node_modules/site-shot-sdk/package.json")).version, "0.2.1");
 });
 
 test("the README example runs on demand only, reads nothing it need not, and takes the key from a secret", () => {

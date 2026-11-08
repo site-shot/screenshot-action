@@ -194,7 +194,7 @@ jobs:
               assert.equal(`${url.origin}${url.pathname}`, "https://api.site-shot.com/");
               const query = { format: "png", response_type: "json", url: TARGET, userkey: KEY, ...expected.query };
               assert.deepEqual([...url.searchParams].sort(), Object.entries(query).sort());
-              assert.deepEqual(call.headers, { accept: "application/json", "user-agent": "site-shot-sdk/0.2.0 node" });
+              assert.deepEqual(call.headers, { accept: "application/json", "user-agent": "site-shot-sdk/0.2.1 node" });
             }
 
             const [mask, ...shown] = lines(`${base}.stdout`);

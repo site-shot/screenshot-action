@@ -17,7 +17,7 @@ For maintainers. Users read the [README](README.md).
 ## Commands
 
 ```sh
-npm ci            # site-shot-sdk 0.2.0 and the dev tools, as locked
+npm ci            # site-shot-sdk 0.2.1 and the dev tools, as locked
 npm run check     # tsc, then the build, then every test
 ```
 
@@ -25,7 +25,7 @@ npm run check     # tsc, then the build, then every test
 
 ## The SDK
 
-The action depends on exactly `site-shot-sdk@0.2.0`, locked in `package-lock.json` to the registry tarball with integrity `sha512-ctHA/2va7FFEdF1daLGG9bIeq/ycSDJvh5N1yt0aJVg0A1GTIEELLdGQZIxPK+b0ky0UbDJsoBX10G7dV6K3Sg==`. That tarball was checked on 2026-10-24: its runtime code differs from site-shot-sdk 0.1.3 only in the `SDK_VERSION` string, and its types only add `webp` to `format`, which the action does not use. The action relies on the SDK for everything on the wire: the endpoint, the `userkey` query parameter, `response_type=json`, the call to `fetch`, which follows redirects as it does by default, base64 decoding and the error classes. It adds no request of its own, no proxy and no fallback, and changes nothing in the SDK's transport.
+The action depends on exactly `site-shot-sdk@0.2.1`, locked in `package-lock.json` to the registry tarball with integrity `sha512-qpQqLVscDNAVNmee5tMR8ku0K+hy+cjvR8XxGfC2ojBsCNdvPpYPX7epZ3fLjD1rN7+I3q4SXXYz3tCriP5BOg==`. That tarball was checked on 2026-11-08: its runtime code differs from site-shot-sdk 0.2.0 (checked on 2026-10-24 against 0.1.3) only in the `SDK_VERSION` string and in one new rule, which reads Site-Shot's free-plan refusals ("Free plan used up", "Geotargeting needs a paid plan") as `QuotaError` instead of `APIError`. The action relies on the SDK for everything on the wire: the endpoint, the `userkey` query parameter, `response_type=json`, the call to `fetch`, which follows redirects as it does by default, base64 decoding and the error classes. It adds no request of its own, no proxy and no fallback, and changes nothing in the SDK's transport.
 
 Changing the SDK version is a reviewed change: read the new tarball, update the pin and the lock, rebuild, and update the assertions in `test/metadata.test.ts` that hold the version and integrity.
 

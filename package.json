@@ -19,7 +19,7 @@
     "check": "npm run typecheck && npm run build && npm test"
   },
   "dependencies": {
-    "site-shot-sdk": "0.2.0"
+    "site-shot-sdk": "0.2.1"
   },
   "devDependencies": {
     "@types/node": "24.19.2",

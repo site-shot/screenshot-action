@@ -1,5 +1,5 @@
 // Built by `npm run build` from src/ with esbuild; do not edit.
-// It includes site-shot-sdk 0.2.0 from the npm registry, under this license:
+// It includes site-shot-sdk 0.2.1 from the npm registry, under this license:
 /*!
 MIT License
 
@@ -57,7 +57,7 @@ var SiteShotTimeoutError = class extends SiteShotError {
 var APIError = class extends SiteShotError {
 };
 var DEFAULT_BASE_URL = "https://api.site-shot.com/";
-var SDK_VERSION = "0.2.0";
+var SDK_VERSION = "0.2.1";
 var DEFAULT_SERVER_TIMEOUT_MS = 6e4;
 var CLIENT_TIMEOUT_HEADROOM_MS = 3e4;
 var RESERVED_PARAMS = /* @__PURE__ */ new Set(["url", "userkey", "response_type", "request_headers"]);
@@ -101,6 +101,7 @@ function asErrorText(value) {
 function isAbortError(err) {
   return typeof err === "object" && err !== null && err.name === "AbortError";
 }
+var FREE_PLAN_REFUSAL = /free plan used up|free api trial used up|geotargeting needs a paid plan/;
 function classifyError(status, errorText, body) {
   const opts = { httpStatus: status, body };
   const lower = (errorText ?? "").toLowerCase();
@@ -109,6 +110,9 @@ function classifyError(status, errorText, body) {
       "The requested country has no available capacity right now (country_unavailable). Retry later, or drop strict_country to allow the default US fallback.",
       opts
     );
+  }
+  if (FREE_PLAN_REFUSAL.test(lower)) {
+    return new QuotaError(`Site-Shot free plan limit: ${errorText}`, opts);
   }
   if (/userkey|api.?key|invalid key|unauthoriz|authenticat/.test(lower) || status === 401) {
     return new AuthError(
@@ -636,6 +640,7 @@ function setOutput(file, name, value) {
 }
 
 // src/action.ts
+var PRICING = "https://www.site-shot.com/pricing/";
 var CAPTURE_ERRORS = [
   [
     CountryUnavailableError,
@@ -675,7 +680,7 @@ async function run(env, print2) {
   try {
     png = await new SiteShot(capture.apiKey, { retries: 0 }).capture(options);
   } catch (error) {
-    print2(command("error", `${describeCaptureError(error)} Nothing was saved, and the action does not retry.`));
+    print2(command("error", `${describeCaptureError(error, options)} Nothing was saved, and the action does not retry.`));
     return 1;
   }
   let size;
@@ -721,18 +726,37 @@ function describe(error) {
   }
   return "The action failed with an unexpected error.";
 }
-function describeCaptureError(error) {
+function describeCaptureError(error, options) {
   try {
     for (const [type, name, meaning] of CAPTURE_ERRORS) {
       if (error instanceof type) {
         const status = error.httpStatus;
         const http = typeof status === "number" && Number.isInteger(status) && status >= 300 && status <= 599 ? `, HTTP ${status}` : "";
-        return `${meaning} (${name}${http}).`;
+        return `${explain(error, options) ?? meaning} (${name}${http}).`;
       }
     }
   } catch {
   }
   return "The capture failed with an unexpected error.";
+}
+function explain(error, options) {
+  const text = answerText(error.body);
+  if (error instanceof QuotaError) {
+    const foreign = options.country !== void 0 && options.country !== "US";
+    if (/geotargeting needs a paid plan/i.test(text) || foreign && error.httpStatus === 200) {
+      return `Site-Shot refused country ${String(options.country)}: the free plan captures from the default location or the US only, and a country other than US needs a paid plan (${PRICING}); the refused attempt counts toward the month's captures`;
+    }
+  }
+  return void 0;
+}
+function answerText(body) {
+  if (typeof body === "string") return body;
+  if (typeof body === "object" && body !== null) {
+    const { error, message } = body;
+    if (typeof error === "string") return error;
+    if (typeof message === "string") return message;
+  }
+  return "";
 }
 
 // src/index.ts

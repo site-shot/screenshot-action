@@ -113,7 +113,7 @@ test("the bundle captures one page as the runner runs it, with the defaults of a
     ["userkey", KEY],
     ["width", "1024"],
   ]);
-  assert.deepEqual(call.headers, { accept: "application/json", "user-agent": "site-shot-sdk/0.2.0 node" });
+  assert.deepEqual(call.headers, { accept: "application/json", "user-agent": "site-shot-sdk/0.2.1 node" });
   assert.deepEqual(fs.readFileSync(join(run.workspace, "site-shot-output", "screenshot.png")), SCREENSHOT);
   assert.equal(run.outputs, "path=site-shot-output/screenshot.png\n");
   assert.ok(run.lines.at(-1)?.startsWith("Saved a 1024x768 PNG"), run.lines.join("\n"));
