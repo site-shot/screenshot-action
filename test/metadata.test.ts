@@ -22,6 +22,7 @@ interface Step {
 }
 
 const METADATA = parse(read("action.yml")) as {
+  branding?: unknown;
   inputs: Record<string, { required?: boolean; default?: unknown }>;
   outputs: Record<string, unknown>;
   runs: Record<string, unknown>;
@@ -43,6 +44,11 @@ function actionStep(steps: Step[]): Step & { with: Record<string, unknown> } {
 
 test("action.yml declares a node24 JavaScript action that runs the bundle and nothing else", () => {
   assert.deepEqual(METADATA.runs, { using: "node24", main: "dist/index.mjs" });
+});
+
+test("action.yml carries the branding a Marketplace listing shows", () => {
+  // camera is one of the Feather icons GitHub accepts; blue one of its colors.
+  assert.deepEqual(METADATA.branding, { icon: "camera", color: "blue" });
 });
 
 test("action.yml declares the action's inputs, required ones without defaults, and its one output", () => {

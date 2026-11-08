@@ -1,5 +1,8 @@
 name: Site-Shot Screenshot
 description: Capture one public https:// page as a PNG with the Site-Shot API, in one capture attempt with retries disabled.
+branding:
+  icon: camera
+  color: blue
 inputs:
   url:
     description: The public https:// page to capture, such as https://www.example.com/.
