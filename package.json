@@ -2,7 +2,7 @@
   "name": "site-shot-github-action",
   "version": "0.1.0",
   "private": true,
-  "description": "GitHub Action that captures one public HTTPS page as a PNG with the Site-Shot API, through the official site-shot-sdk. Release candidate, not released.",
+  "description": "GitHub Action that captures one public HTTPS page as a PNG with the Site-Shot API, through the official site-shot-sdk.",
   "license": "MIT",
   "repository": {
     "type": "git",

@@ -36,8 +36,11 @@ function readmeWorkflow(): { on: Record<string, unknown>; permissions: unknown; 
   return workflows[0];
 }
 
+/** The inputs of the release tag the README example uses. */
+const RELEASED_INPUTS = ["url", "api-key", "width", "height", "country"];
+
 function actionStep(steps: Step[]): Step & { with: Record<string, unknown> } {
-  const step = steps.find((candidate) => candidate.uses === "./.github/actions/site-shot");
+  const step = steps.find((candidate) => candidate.uses === "site-shot/screenshot-action@v0.1.0");
   assert.ok(step?.with, "the example uses the action");
   return step as Step & { with: Record<string, unknown> };
 }
@@ -96,10 +99,26 @@ test("the README example runs on demand only, reads nothing it need not, and tak
   assert.match(String(step.with["api-key"]), /^\$\{\{ secrets\.[A-Z0-9_]+ \}\}$/);
   for (const name of Object.keys(step.with)) assert.ok(name in METADATA.inputs, `undeclared input ${name}`);
   const checkout = steps.find((candidate) => candidate.uses?.startsWith("actions/checkout@"));
-  assert.equal(checkout?.with?.["persist-credentials"], false);
+  if (checkout !== undefined) assert.equal(checkout.with?.["persist-credentials"], false);
   for (const { run } of steps) {
     if (run !== undefined) assert.ok(!run.includes("${{"), `expression in a run script: ${run}`);
   }
+});
+
+test("the README example works on the free plan with the release tag and keeps the screenshot", () => {
+  const workflow = readmeWorkflow();
+  const steps = Object.values(workflow.jobs).flatMap((job) => job.steps);
+  const step = actionStep(steps);
+  for (const name of Object.keys(step.with)) assert.ok(RELEASED_INPUTS.includes(name), `${name} is not in v0.1.0`);
+  // The free plan captures from the default location or the US only.
+  assert.ok(step.with.country === undefined || String(step.with.country).toUpperCase() === "US", "country");
+  assert.match(String(step.with["api-key"]), /secrets\.SITESHOT_API_KEY\b/);
+  const id = (step as Step & { id?: string }).id;
+  const upload = steps.find((candidate) => candidate.uses?.startsWith("actions/upload-artifact@"));
+  assert.ok(upload?.with, "an upload-artifact step");
+  assert.equal(upload.with.path, `\${{ steps.${id}.outputs.path }}`);
+  assert.equal(upload.with["if-no-files-found"], "error");
+  assert.ok(steps.indexOf(upload) > steps.indexOf(step), "the upload comes after the capture");
 });
 
 test("the README example's inputs are accepted and sent as written", async (t) => {
@@ -115,6 +134,6 @@ test("the README example's inputs are accepted and sent as written", async (t) =
   assert.equal(params.get("url"), inputs.url);
   assert.equal(params.get("width"), inputs.width);
   assert.equal(params.get("height"), inputs.height);
-  assert.equal(params.get("country"), inputs.country?.toUpperCase());
+  assert.equal(params.get("country"), inputs.country?.toUpperCase() ?? null);
   assert.equal(params.get("strict_country"), inputs.country ? "1" : null);
 });

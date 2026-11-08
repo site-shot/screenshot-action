@@ -89,6 +89,30 @@ Two checks went beyond the offline tests. Each ran once, locally and not on a Gi
 - Large images whose content compresses less well. A less compressible PNG of the largest size makes a larger answer, which takes memory on top of the decompression. The offline tests reach the size limits only with images of 8000x1 and 1x20000, and their largest image is 1024x768.
 - The GitHub Marketplace requirements, and whether the name in `action.yml` is free there.
 
+## Status of v0.1.0
+
+Moved here from the README on 2026-11-08; it describes the bundle tagged `v0.1.0`, with site-shot-sdk 0.2.0.
+
+As of 2026-10-25:
+
+- **Offline tests**: pass on Node.js 24.10.0 with site-shot-sdk 0.2.0. They replace the SDK's `fetch` with a stub, refuse every network connection, use synthetic images and never contact Site-Shot.
+- **The largest PNG it accepts**: checked once, locally on one Mac with Node.js 24.10.0, through this exact bundle, with the offline tests' stub in place of Site-Shot. A synthetic 8000x20000 PNG with 16-bit RGBA went through the decoding, the PNG check and the write with a peak RSS of 2,706,407,424 bytes (2.52 GiB), and the action child process took 0.804 s, excluding fixture generation. That image compresses very well, to a 6.6 MiB PNG, so the check does not cover every image of that size, other operating systems or a GitHub runner.
+- **Against the live Site-Shot API**: one capture, made locally through this exact bundle, not on a GitHub runner: `https://example.com/` as a 1024x768 PNG, country `DE` (strict), retries disabled. It succeeded, and the saved PNG shows that page, with its text and link readable. The API key was not given to GitHub. It is a single test capture of one page.
+- **On a GitHub Actions runner**: one manual run of `.github/workflows/native-acceptance.yml`, on 2026-10-25, passed: https://github.com/site-shot/screenshot-action/actions/runs/40236678006, from commit `bad2c9b11626aa3b42d4ce1bef72f0b9992d44b1`. It ran on a standard `ubuntu-latest` runner, which reported Ubuntu 24.04.5. The runner itself ran the action with `uses: ./`, through `action.yml` and this exact bundle in `dist/`, on Node.js 24.21.0. Five runs of the action passed their checks, and so did the 66 offline tests. The run was offline, with a synthetic PNG, the tests' dummy key, the stub in place of Site-Shot and the network guard. It captured no page: no capture from a GitHub runner has been made.
+- **Release**: tag `v0.1.0` (2026-10-31). The source is public at https://github.com/site-shot/screenshot-action; there is no GitHub Release or GitHub Marketplace listing. Publishing to the GitHub Marketplace requires acceptance of the GitHub Marketplace Developer Agreement; Marketplace publication is pending.
+
+The release is a separate step, with its own approval and evidence. An approval for live captures has to list every capture attempt it allows, including those expected to fail and those whose outcome turns out unknown, because each one can be billed.
+
+## Since v0.1.0 (main)
+
+Not in a release yet, and not run on a GitHub runner or against the live API:
+
+- site-shot-sdk 0.2.1, which reads the free plan's refusals as `QuotaError`;
+- the inputs `full-page`, `no-cookie-popup`, `no-ads`, `delay` and `path`, and `branding` in `action.yml`;
+- error lines that carry the API's `error_code` and say what to do for the answers Site-Shot words in a known way, an empty-key message without "paid", and country codes checked against ISO 3166-1 alpha-2.
+
+The rebuilt `dist/index.mjs` is no longer the bundle that the native acceptance run accepted: `ACCEPTED_BUNDLE_SHA256` in `.github/workflows/native-acceptance.yml` names the new one, and that workflow has to run again before a release.
+
 ## Releasing
 
 Tag `v0.1.0` marks commit `ef1cafb` (2026-10-31, on the owner's approval of the free-plan release). There is no GitHub Release or GitHub Marketplace listing. This file plans or authorizes no run, capture or publication. Of the checks before a release, the two in "Verified locally" are done, and so is the one run of the native acceptance workflow (see "Native acceptance"). Publication remains, and it needs its own explicit approval and evidence.
