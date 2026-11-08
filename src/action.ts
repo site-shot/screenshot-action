@@ -187,8 +187,10 @@ function describeCaptureError(error: unknown, options: CaptureOptions): string {
  */
 function explain(error: SiteShotError, options: CaptureOptions, code: string | undefined): string | undefined {
   const text = answerText(error.body);
-  if (code === "proxy_navigation_failed") {
-    // Site-Shot reports a host that does not resolve as "504 Gateway Timeout".
+  if (code === "proxy_navigation_failed" || code === "dns_lookup_failed") {
+    // Site-Shot reports a host that does not resolve as "504 Gateway Timeout"
+    // with proxy_navigation_failed; dns_lookup_failed ("Host not found") is
+    // its own code for that once the API's honest-errors change ships.
     return "Site-Shot could not open the page: check that its host name resolves and that the site is reachable from the internet";
   }
   if (error instanceof QuotaError) {

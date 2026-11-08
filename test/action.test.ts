@@ -321,6 +321,10 @@ test("the answers Site-Shot words in a known way get a line that says what to do
   const used =
     "Free plan used up: 100 captures this month. It renews on 2026-11-30 (UTC). A paid plan switches this key back on now; paid plans start at $5/month for 2,000 captures: https://www.site-shot.com/pricing/";
   const unresolvable = { ...failedCapture("504 Gateway Timeout", 504, SCREENSHOT, TARGET), error_code: "proxy_navigation_failed" };
+  const hostNotFound = {
+    ...failedCapture("Host not found: nonexistent-host.invalid. Check the URL for typos.", 0, SCREENSHOT, TARGET),
+    error_code: "dns_lookup_failed",
+  };
   const abort = Object.assign(new Error("This operation was aborted"), { name: "AbortError" });
   const cases: [string, Reply, string[]][] = [
     [
@@ -336,6 +340,7 @@ test("the answers Site-Shot words in a known way get a line that says what to do
       json(unresolvable),
       ["could not open the page", "host name resolves", "(SiteShotTimeoutError, error_code proxy_navigation_failed)."],
     ],
+    ["host not found", json(hostNotFound), ["could not open the page", "host name resolves", "error_code dns_lookup_failed)."]],
     ["render timed out", json(failedCapture("Timeout: render timed out", 504, SCREENSHOT, TARGET)), ["counts toward the plan"]],
     ["client-side timeout", abort, ["may still finish the capture", "may count toward the plan", "(SiteShotTimeoutError)."]],
     [

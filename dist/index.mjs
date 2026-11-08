@@ -809,7 +809,7 @@ function describeCaptureError(error, options) {
 }
 function explain(error, options, code) {
   const text = answerText(error.body);
-  if (code === "proxy_navigation_failed") {
+  if (code === "proxy_navigation_failed" || code === "dns_lookup_failed") {
     return "Site-Shot could not open the page: check that its host name resolves and that the site is reachable from the internet";
   }
   if (error instanceof QuotaError) {
