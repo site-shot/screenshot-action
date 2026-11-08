@@ -640,18 +640,19 @@ function setOutput(file, name, value) {
 }
 
 // src/action.ts
+var START = "https://www.site-shot.com/start/";
 var PRICING = "https://www.site-shot.com/pricing/";
 var CAPTURE_ERRORS = [
   [
     CountryUnavailableError,
     "CountryUnavailableError",
-    "Site-Shot has no capacity in the requested country right now, and a strict country capture does not fall back to another country"
+    "Site-Shot has no capture capacity in the requested country, and a strict country capture does not fall back to another country"
   ],
-  [AuthError, "AuthError", "Site-Shot rejected the API key"],
+  [AuthError, "AuthError", `Site-Shot rejected the API key; get or check your key at ${START}`],
   [
     QuotaError,
     "QuotaError",
-    "Site-Shot refused the capture because of the plan behind the key: quota used up, payment due, no active subscription or too many captures at once"
+    `Site-Shot refused the capture because of the plan behind the key: quota used up, payment due or no active subscription; check the key's plan at ${START}`
   ],
   [InvalidParamsError, "InvalidParamsError", "Site-Shot rejected the capture parameters"],
   [SiteShotTimeoutError, "SiteShotTimeoutError", "The capture timed out"],
@@ -732,20 +733,37 @@ function describeCaptureError(error, options) {
       if (error instanceof type) {
         const status = error.httpStatus;
         const http = typeof status === "number" && Number.isInteger(status) && status >= 300 && status <= 599 ? `, HTTP ${status}` : "";
-        return `${explain(error, options) ?? meaning} (${name}${http}).`;
+        const code = errorCode2(error.body);
+        return `${explain(error, options, code) ?? meaning} (${name}${http}${code === void 0 ? "" : `, error_code ${code}`}).`;
       }
     }
   } catch {
   }
   return "The capture failed with an unexpected error.";
 }
-function explain(error, options) {
+function explain(error, options, code) {
   const text = answerText(error.body);
+  if (code === "proxy_navigation_failed") {
+    return "Site-Shot could not open the page: check that its host name resolves and that the site is reachable from the internet";
+  }
   if (error instanceof QuotaError) {
     const foreign = options.country !== void 0 && options.country !== "US";
     if (/geotargeting needs a paid plan/i.test(text) || foreign && error.httpStatus === 200) {
       return `Site-Shot refused country ${String(options.country)}: the free plan captures from the default location or the US only, and a country other than US needs a paid plan (${PRICING}); the refused attempt counts toward the month's captures`;
     }
+    if (/free plan used up|free api trial used up/i.test(text)) {
+      const renews = /renews on (\d{4}-\d{2}-\d{2})/i.exec(text)?.[1];
+      return `The free plan's captures for this month are used up${renews === void 0 ? "" : `; it renews on ${renews} (UTC)`}. Paid plans start at $5 a month for 2,000 captures (${PRICING}), and the key stays the same`;
+    }
+    if (error.httpStatus === 429) {
+      return "Site-Shot refused the capture: too many captures at once on this key (the free plan allows one at a time)";
+    }
+  }
+  if (error instanceof SiteShotTimeoutError && error.body === void 0) {
+    return "Site-Shot did not answer within the action's time limit; it may still finish the capture, and the attempt may count toward the plan";
+  }
+  if (error instanceof SiteShotTimeoutError) {
+    return "The page did not finish rendering in time; the attempt counts toward the plan";
   }
   return void 0;
 }
@@ -757,6 +775,11 @@ function answerText(body) {
     if (typeof message === "string") return message;
   }
   return "";
+}
+function errorCode2(body) {
+  if (typeof body !== "object" || body === null) return void 0;
+  const code = body.error_code;
+  return typeof code === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(code) ? code : void 0;
 }
 
 // src/index.ts

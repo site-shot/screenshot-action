@@ -230,6 +230,43 @@ test("a country the free plan does not cover fails the step with a line that say
   assert.deepEqual(tree(run.workspace), [], "workspace");
 });
 
+test("the answers Site-Shot words in a known way get a line that says what to do, without Site-Shot's text", async (t) => {
+  const used =
+    "Free plan used up: 100 captures this month. It renews on 2026-11-30 (UTC). A paid plan switches this key back on now; paid plans start at $5/month for 2,000 captures: https://www.site-shot.com/pricing/";
+  const unresolvable = { ...failedCapture("504 Gateway Timeout", 504, SCREENSHOT, TARGET), error_code: "proxy_navigation_failed" };
+  const abort = Object.assign(new Error("This operation was aborted"), { name: "AbortError" });
+  const cases: [string, Reply, string[]][] = [
+    [
+      "free plan used up",
+      new Response(used, { status: 403 }),
+      ["renews on 2026-11-30 (UTC)", "$5 a month for 2,000 captures (https://www.site-shot.com/pricing/)", "(QuotaError, HTTP 403)."],
+    ],
+    ["key rejected", json({ message: "Invalid authentication credentials" }, 401), ["https://www.site-shot.com/start/", "(AuthError, HTTP 401)."]],
+    ["no subscription", json({ message: "No active subscription found" }, 403), ["https://www.site-shot.com/start/", "(QuotaError, HTTP 403)."]],
+    ["parallel limit", json({ message: "API rate limit exceeded" }, 429), ["one at a time", "(QuotaError, HTTP 429)."]],
+    [
+      "unresolvable host",
+      json(unresolvable),
+      ["could not open the page", "host name resolves", "(SiteShotTimeoutError, error_code proxy_navigation_failed)."],
+    ],
+    ["render timed out", json(failedCapture("Timeout: render timed out", 504, SCREENSHOT, TARGET)), ["counts toward the plan"]],
+    ["client-side timeout", abort, ["may still finish the capture", "may count toward the plan", "(SiteShotTimeoutError)."]],
+    [
+      "no capacity in the country",
+      json({ ...failedCapture("country_unavailable", 503, SCREENSHOT, TARGET), error_code: "http_503" }),
+      ["(CountryUnavailableError, error_code http_503)."],
+    ],
+  ];
+  for (const [name, reply, expected] of cases) {
+    const run = await runAction(t, { reply });
+    const line = assertFailed(run, 1);
+    for (const text of expected) assert.ok(line.includes(text), `${name}: "${text}" in ${line}`);
+    for (const text of ["Free plan used up", "Gateway", "right now", "Invalid authentication"]) {
+      assert.equal(line.includes(text), false, `${name}: ${line}`);
+    }
+  }
+});
+
 test("an answer that is not a valid PNG fails the step with no file", async (t) => {
   const damaged = Buffer.from(SCREENSHOT);
   damaged[5000] = (damaged[5000] as number) ^ 0x01;
@@ -304,6 +341,11 @@ test("the key, the target URL, the request and the answer never reach the log or
     ["an invalid input", { inputs: { width: "1" } }],
     ["an error message carrying the key", { reply: json({ message: hostile }, 401) }],
     ["a capture error carrying the key", { reply: json(failedCapture(hostile, 500, SCREENSHOT, TARGET)) }],
+    [
+      "an error_code carrying the key",
+      { reply: json({ ...failedCapture("Screenshot capture failed", 500, SCREENSHOT, TARGET), error_code: hostile }) },
+    ],
+    ["a refusal carrying the key", { reply: new Response(`Free plan used up. ${hostile}`, { status: 403 }) }],
     ["a plain-text error body", { reply: new Response(hostile, { status: 500 }) }],
     [
       "a fetch error quoting the request URL",

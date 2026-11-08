@@ -23,6 +23,7 @@ import { OUTPUT_PATH, OutputError, prepareDestination, writeScreenshot, type Des
 import { PngError, checkPng, type PngSize } from "./png.ts";
 import { RunnerError, command, getInput, outputFile, setOutput, type Env } from "./runner.ts";
 
+const START = "https://www.site-shot.com/start/";
 const PRICING = "https://www.site-shot.com/pricing/";
 
 /** What each SDK error class means, in the order they are tested. */
@@ -30,13 +31,13 @@ const CAPTURE_ERRORS = [
   [
     CountryUnavailableError,
     "CountryUnavailableError",
-    "Site-Shot has no capacity in the requested country right now, and a strict country capture does not fall back to another country",
+    "Site-Shot has no capture capacity in the requested country, and a strict country capture does not fall back to another country",
   ],
-  [AuthError, "AuthError", "Site-Shot rejected the API key"],
+  [AuthError, "AuthError", `Site-Shot rejected the API key; get or check your key at ${START}`],
   [
     QuotaError,
     "QuotaError",
-    "Site-Shot refused the capture because of the plan behind the key: quota used up, payment due, no active subscription or too many captures at once",
+    `Site-Shot refused the capture because of the plan behind the key: quota used up, payment due or no active subscription; check the key's plan at ${START}`,
   ],
   [InvalidParamsError, "InvalidParamsError", "Site-Shot rejected the capture parameters"],
   [SiteShotTimeoutError, "SiteShotTimeoutError", "The capture timed out"],
@@ -144,7 +145,8 @@ function describeCaptureError(error: unknown, options: CaptureOptions): string {
         const status = error.httpStatus;
         const http =
           typeof status === "number" && Number.isInteger(status) && status >= 300 && status <= 599 ? `, HTTP ${status}` : "";
-        return `${explain(error, options) ?? meaning} (${name}${http}).`;
+        const code = errorCode(error.body);
+        return `${explain(error, options, code) ?? meaning} (${name}${http}${code === undefined ? "" : `, error_code ${code}`}).`;
       }
     }
   } catch {
@@ -157,14 +159,32 @@ function describeCaptureError(error: unknown, options: CaptureOptions): string {
  * A more precise meaning for the answers Site-Shot words in a known way. The
  * answer's text is only matched here, never printed.
  */
-function explain(error: SiteShotError, options: CaptureOptions): string | undefined {
+function explain(error: SiteShotError, options: CaptureOptions, code: string | undefined): string | undefined {
   const text = answerText(error.body);
+  if (code === "proxy_navigation_failed") {
+    // Site-Shot reports a host that does not resolve as "504 Gateway Timeout".
+    return "Site-Shot could not open the page: check that its host name resolves and that the site is reachable from the internet";
+  }
   if (error instanceof QuotaError) {
     // In JSON mode the refusal is HTTP 200 with the reason in `error`.
     const foreign = options.country !== undefined && options.country !== "US";
     if (/geotargeting needs a paid plan/i.test(text) || (foreign && error.httpStatus === 200)) {
       return `Site-Shot refused country ${String(options.country)}: the free plan captures from the default location or the US only, and a country other than US needs a paid plan (${PRICING}); the refused attempt counts toward the month's captures`;
     }
+    if (/free plan used up|free api trial used up/i.test(text)) {
+      const renews = /renews on (\d{4}-\d{2}-\d{2})/i.exec(text)?.[1];
+      return `The free plan's captures for this month are used up${renews === undefined ? "" : `; it renews on ${renews} (UTC)`}. Paid plans start at $5 a month for 2,000 captures (${PRICING}), and the key stays the same`;
+    }
+    if (error.httpStatus === 429) {
+      return "Site-Shot refused the capture: too many captures at once on this key (the free plan allows one at a time)";
+    }
+  }
+  if (error instanceof SiteShotTimeoutError && error.body === undefined) {
+    // The SDK gave up waiting; Site-Shot may still be working on the capture.
+    return "Site-Shot did not answer within the action's time limit; it may still finish the capture, and the attempt may count toward the plan";
+  }
+  if (error instanceof SiteShotTimeoutError) {
+    return "The page did not finish rendering in time; the attempt counts toward the plan";
   }
   return undefined;
 }
@@ -178,4 +198,11 @@ function answerText(body: unknown): string {
     if (typeof message === "string") return message;
   }
   return "";
+}
+
+/** The API's `error_code`, an identifier such as proxy_navigation_failed; anything else is ignored. */
+function errorCode(body: unknown): string | undefined {
+  if (typeof body !== "object" || body === null) return undefined;
+  const code = (body as Record<string, unknown>).error_code;
+  return typeof code === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(code) ? code : undefined;
 }
