@@ -35,7 +35,7 @@ inputs:
     required: false
     default: "false"
   delay:
-    description: Optional wait before the capture, in milliseconds, 0 to 60000. Empty uses Site-Shot's default of 500.
+    description: Optional wait before the capture, in milliseconds, 0 to 60000. Empty uses Site-Shot's default of 500. The action waits about 90 seconds for Site-Shot in all, so with a long delay a slow page can run past that limit; the step then fails and the attempt may still count toward the plan.
     required: false
     default: ""
   path:

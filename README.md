@@ -50,11 +50,11 @@ Why it looks like this:
 | `api-key` | yes | | Your Site-Shot API key, from a secret such as `${{ secrets.SITESHOT_API_KEY }}`. Never write the key into a workflow. |
 | `width` | no | `1024` | Viewport width in pixels, 100 to 8000. |
 | `height` | no | `768` | Viewport height in pixels, 100 to 20000. |
-| `country` | no | | A two-letter ISO 3166-1 alpha-2 country code, such as `US` or `DE`; the capture is strict and fails rather than use another country. On the free plan only `US` works: Site-Shot refuses any other country, the step fails, and the refused attempt still counts toward the month's 100. Other countries need a [paid plan](https://www.site-shot.com/pricing/). In `v0.1.0` that refusal is reported as `APIError`; on `main` the line says that the country needs a paid plan. |
+| `country` | no | | A two-letter ISO 3166-1 alpha-2 country code, such as `US` or `DE` (`UK` is also accepted, and Site-Shot reads it as `GB`); the capture is strict and fails rather than use another country. On the free plan only `US` works: Site-Shot refuses any other country, the step fails, and the refused attempt still counts toward the month's 100. Other countries need a [paid plan](https://www.site-shot.com/pricing/). In `v0.1.0` that refusal is reported as `APIError`; on `main` the line says that the country needs a paid plan. |
 | `full-page` | no | `false` | main only. `true` captures the whole scrollable page, up to 20000 pixels high, instead of the viewport only. |
 | `no-cookie-popup` | no | `false` | main only. `true` has Site-Shot remove cookie-consent banners before the capture. |
 | `no-ads` | no | `false` | main only. `true` has Site-Shot remove ads before the capture. |
-| `delay` | no | | main only. A wait before the capture in milliseconds, 0 to 60000. Empty uses Site-Shot's default of 500. |
+| `delay` | no | | main only. A wait before the capture in milliseconds, 0 to 60000. Empty uses Site-Shot's default of 500. The action waits about 90 seconds for Site-Shot in all, and the delay comes out of that time: with a long delay a slow page can run past the limit, the step fails, and the attempt may still count toward the plan. |
 | `path` | no | `site-shot-output/screenshot.png` | main only. Where to save the PNG, relative to the workspace and ending in `.png`, such as `screenshots/home.png`. Missing directories are created. |
 
 The output `path` is the saved PNG, relative to the workspace: the `path` input, or `site-shot-output/screenshot.png` in `v0.1.0`.
